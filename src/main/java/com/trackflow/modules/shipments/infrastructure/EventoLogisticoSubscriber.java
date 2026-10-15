@@ -1,11 +1,15 @@
 package com.trackflow.modules.shipments.infrastructure;
 
 import com.trackflow.modules.shipments.application.AplicarEventoLogistico;
+import com.trackflow.modules.shipments.infrastructure.messaging.EventosDeIntegracionRabbitMQConfig;
 import com.trackflow.shared.events.EventoLogisticoRegistradoEvent;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
+/**
+ * Recibe del bus los eventos logísticos registrados por la API de logística y los aplica
+ * al envío correspondiente. Si falla, el mensaje pasa a la cola de descartados.
+ */
 @Component
 public class EventoLogisticoSubscriber {
 
@@ -15,7 +19,7 @@ public class EventoLogisticoSubscriber {
         this.aplicarEventoLogistico = aplicarEventoLogistico;
     }
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @RabbitListener(queues = EventosDeIntegracionRabbitMQConfig.QUEUE_EVENTOS_LOGISTICOS)
     public void on(EventoLogisticoRegistradoEvent event) {
         aplicarEventoLogistico.ejecutar(event);
     }
