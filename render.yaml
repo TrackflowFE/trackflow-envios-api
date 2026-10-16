@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: trackflow
+    name: trackflow-envios-api
     runtime: docker
     plan: free
-    region: oregon
+    region: ohio
     healthCheckPath: /actuator/health
     envVars:
       # Todos estos valores se definen en el dashboard de Render, nunca en este archivo.
@@ -13,6 +13,10 @@ services:
         sync: false
       - key: TRACKFLOW_DB_PASSWORD
         sync: false
+      # La base es la de Supabase con plan gratuito: unas 15 conexiones para las tres APIs.
+      - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+        value: "3"
+      # Las tres APIs deben usar el mismo broker y el mismo vhost, o los eventos no cruzan.
       - key: RABBITMQ_HOST
         sync: false
       - key: RABBITMQ_USER
@@ -31,9 +35,9 @@ services:
       # Sin esta clave, /api/admin/** queda inaccesible (cerrado por defecto).
       - key: TRACKFLOW_ADMIN_CLAVE
         sync: false
-      # Render genera el secreto de firma; si se regenera, los tokens vigentes caducan.
+      # Tiene que ser idéntico en las tres APIs: solo esta emite los tokens y las otras dos los validan.
       - key: TRACKFLOW_JWT_SECRET
-        generateValue: true
+        sync: false
       # Dominio(s) del frontend, separados por comas. Sin él solo se admite localhost.
       - key: TRACKFLOW_CORS_ORIGINS
         sync: false
