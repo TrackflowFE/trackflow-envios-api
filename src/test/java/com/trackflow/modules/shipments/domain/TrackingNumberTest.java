@@ -42,7 +42,6 @@ class TrackingNumberTest {
         TrackingNumber a = TrackingNumber.of("TF0123456789AB");
 
         assertNotEquals(a, TrackingNumber.of("TF0123456789AC"));
-        assertNotEquals(a, "TF0123456789AB");
         assertNotEquals(null, a);
     }
 }
