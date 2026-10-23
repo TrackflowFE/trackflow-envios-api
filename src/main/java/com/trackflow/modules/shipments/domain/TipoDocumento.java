@@ -21,7 +21,7 @@ public enum TipoDocumento {
      * Ponderaciones que la DIAN define para el dígito de verificación del NIT,
      * ordenadas desde el último dígito hacia el primero.
      */
-    private static final int[] PESOS_NIT = { 3, 7, 13, 17, 19, 23, 29, 37, 41 };
+    private static final int[] PESOS_NIT = { 3, 7, 13, 17, 19, 23, 29, 37, 41, 43, 47, 53, 59, 67, 71 };
 
     private final String descripcion;
     private final boolean empresarial;
@@ -69,6 +69,9 @@ public enum TipoDocumento {
         }
 
         String base = numero.substring(0, separador);
+        if (base.length() > PESOS_NIT.length) {
+            return false;
+        }
         int declarado = Character.getNumericValue(numero.charAt(separador + 1));
 
         int suma = 0;
