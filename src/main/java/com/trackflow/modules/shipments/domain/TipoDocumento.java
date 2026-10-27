@@ -69,9 +69,6 @@ public enum TipoDocumento {
         }
 
         String base = numero.substring(0, separador);
-        if (base.length() > PESOS_NIT.length) {
-            return false;
-        }
         int declarado = Character.getNumericValue(numero.charAt(separador + 1));
 
         int suma = 0;

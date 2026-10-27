@@ -55,4 +55,11 @@ class TipoDocumentoNitDiezDigitosTest {
         assertThrows(DocumentoInvalidoException.class, () -> new Party("Transportes Andinos SAS", TipoDocumento.NIT,
                 "1234567890-1", "3000000001", "Calle 1 # 1-1", 1L));
     }
+
+    /** El formato del NIT nunca debe admitir más dígitos de los que tiene la tabla de pesos. */
+    @ParameterizedTest
+    @ValueSource(strings = { "12345678901-3", "12345678901234-5", "123456789012345-3", "1234567890123456-7" })
+    void unNitMasLargoQueLaTablaDePesosSeRechazaSinLanzarExcepciones(String nit) {
+        assertDoesNotThrow(() -> assertFalse(TipoDocumento.NIT.aceptaNumero(nit)));
+    }
 }
