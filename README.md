@@ -128,16 +128,25 @@ Antes de V24, revisar y resolver manualmente cualquier duplicado activo sin borr
 | `TRACKFLOW_PICKUPS_HORIZONTE_DIAS` | Cuántos días por adelantado se puede agendar. Por defecto 30 |
 | `TRACKFLOW_PICKUPS_ZONA` | Zona horaria en que se cuentan los días y las franjas. Por defecto `America/Bogota` |
 | `TRACKFLOW_PICKUPS_LIMITE_IP` | Máximo de peticiones de autoservicio por IP y ventana (100). |
-| `TRACKFLOW_PICKUPS_LIMITE_RECOGIDA` | Máximo de intentos fallidos o en curso por recogida y ventana (10). |
+| `TRACKFLOW_PICKUPS_LIMITE_RECOGIDA_POR_IP` | Máximo de intentos fallidos o en curso por IP y recogida (5). |
+| `TRACKFLOW_PICKUPS_LIMITE_RECOGIDA` | Máximo global por recogida e instancia (30). |
+| `TRACKFLOW_PICKUPS_LIMITE_SALTOS_PROXY` | Posición desde la derecha en `X-Forwarded-For`; 0 desactiva su uso (valor por defecto). |
+| `TRACKFLOW_PICKUPS_LIMITE_PROXIES_CONFIABLES` | IP literales de proxies confiables, separadas por comas; obligatorias si se usan saltos. |
 | `TRACKFLOW_PICKUPS_LIMITE_VENTANA_SEGUNDOS` | Ventana fija en segundos (900; máximo 86400). |
 
-Los límites están en memoria por instancia y se pierden al reiniciar; no son globales. Detrás de un proxy configurar de forma segura la IP real y filtrar cabeceras reenviadas no confiables. Complementar con limitación distribuida en el borde. Un atacante puede bloquear temporalmente una recogida conocida hasta que termine la ventana; con muchas IP puede repetir ese bloqueo.
+Los límites están en memoria por instancia y se pierden al reiniciar. Cuando el mapa se llena, LRU desaloja ventanas activas y puede reiniciar sus contadores; el límite global también permite bloquear temporalmente una recogida con suficientes IP. Se necesita limitación distribuida en el borde para una protección efectiva.
+
+En local dejar saltos en 0: así se ignora `X-Forwarded-For` y se usa la IP de conexión original. En Render, antes de activar saltos, verificar mediante un despliegue de prueba la IP del proxy y la cadena cruda `X-Forwarded-For`, y restringir el acceso directo a la API. Solo configurar proxies cuya identidad y comportamiento se hayan comprobado; para un salto, el último valor de la cabecera debe ser añadido por el proxy confiable. Los proxies configurados se identifican por IP literal y todos los intermediarios incluidos deben ser confiables. Si no pueden verificarse, mantener 0 y limitar peticiones en el borde; los clientes pueden compartir la cuota del proxy. La estrategia Spring de cabeceras reenviadas sigue activa para HTTPS y también exige un proxy confiable que filtre cabeceras de clientes.
 
 Los valores se definen en el panel de Render, nunca en el repositorio. Sin definirlas, la aplicación usa los valores por defecto de desarrollo local (PostgreSQL y RabbitMQ en `localhost`).
 
 ## Ejecutar en local
 
 Requisitos: Java 21, PostgreSQL y RabbitMQ en la máquina.
+
+El proyecto apunta a JDK 21. Con JDK más recientes pueden aparecer avisos de
+JaCoCo sobre versiones de archivos de clase no compatibles; usar JDK 21 para
+obtener también un informe de cobertura fiable.
 
 ~~~bash
 export TRACKFLOW_OPERADOR_CLAVE=<clave>
@@ -147,6 +156,18 @@ export TRACKFLOW_JWT_SECRET=<texto largo y aleatorio>
 ~~~
 
 Queda en http://localhost:8080 y su documentación en http://localhost:8080/swagger-ui/index.html. Las pruebas se corren con `./mvnw test`.
+
+Para ejecutar toda la suite sin usar un PostgreSQL local en el puerto 5432, se
+pueden levantar servicios aislados en otros puertos:
+
+~~~bash
+docker run -d --rm --name tf-test-pg -e POSTGRES_DB=trackflow -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -p 127.0.0.1:55432:5432 postgres:16
+docker run -d --rm --name tf-test-rabbit -p 127.0.0.1:55672:5672 rabbitmq:3-management
+TRACKFLOW_DB_URL=jdbc:postgresql://localhost:55432/trackflow RABBITMQ_PORT=55672 ./mvnw test
+docker stop tf-test-pg tf-test-rabbit
+~~~
+
+Esperar a que ambos servicios estén listos antes de ejecutar las pruebas.
 
 ## Despliegue
 
