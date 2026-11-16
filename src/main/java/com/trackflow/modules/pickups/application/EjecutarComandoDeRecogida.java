@@ -6,9 +6,18 @@ import com.trackflow.modules.pickups.domain.PickupEventType;
 import com.trackflow.modules.pickups.domain.PickupNumber;
 import com.trackflow.modules.pickups.domain.PickupStatus;
 import com.trackflow.modules.pickups.domain.EnvioYaVinculadoException;
+import com.trackflow.modules.pickups.domain.EnvioYaEnRecorridoException;
+import com.trackflow.modules.pickups.domain.EnvioVinculadoFueraDeCiudadException;
+import com.trackflow.modules.pickups.domain.EnvioVinculadoNoEncontradoException;
 import com.trackflow.modules.pickups.domain.RecogidaNoEncontradaException;
+import com.trackflow.modules.pickups.domain.ReprogramacionSinCambiosException;
+import com.trackflow.modules.pickups.domain.TransicionDeRecogidaInvalidaException;
 import com.trackflow.shared.events.PickupCompletedEvent;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.HexFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -67,8 +76,16 @@ public class EjecutarComandoDeRecogida {
             return;
         }
 
-        if (comando.shipmentTrackingNumber() != null && !comando.shipmentTrackingNumber().isBlank()) {
-            validarEnvio(comando.shipmentTrackingNumber(), comando.cityId(), null);
+        String tracking = comando.shipmentTrackingNumber();
+        String rechazo = null;
+        if (tracking != null && !tracking.isBlank()) {
+            try {
+                validarEnvio(tracking, comando.cityId(), null);
+            } catch (EnvioYaEnRecorridoException | EnvioYaVinculadoException
+                    | EnvioVinculadoNoEncontradoException | EnvioVinculadoFueraDeCiudadException ex) {
+                rechazo = "Guía " + tracking + " no vinculada: " + ex.getMessage();
+                tracking = null;
+            }
         }
         Pickup pickup = Pickup.registrar(numero,
                 comando.address(),
@@ -79,7 +96,7 @@ public class EjecutarComandoDeRecogida {
                 comando.timeSlot(),
                 comando.packageSize(),
                 comando.weightKg(),
-                comando.shipmentTrackingNumber(),
+                tracking,
                 comando.assignedUsername(),
                 comando.actor(),
                 comando.occurredAt(),
@@ -87,6 +104,11 @@ public class EjecutarComandoDeRecogida {
 
         recogidas.save(pickup);
         registrar(comando, PickupEventType.CREATED, null, pickup.getStatus(), null);
+        if (rechazo != null) {
+            eventos.save(new PickupEvent(eventoGuiaId(comando.eventId()), comando.pickupNumber(),
+                    PickupEventType.REJECTED, pickup.getStatus(), pickup.getStatus(), detalleLimitado(rechazo),
+                    comando.actor(), comando.occurredAt()));
+        }
     }
 
     private void reprogramar(RecogidaComando comando) {
@@ -99,8 +121,14 @@ public class EjecutarComandoDeRecogida {
         String fechaAnterior = pickup.getScheduledDate() + " " + pickup.getTimeSlot();
         String responsableAnterior = pickup.getAssignedUsername();
 
-        PickupEventType tipo = pickup.reprogramar(comando.scheduledDate(), comando.timeSlot(),
-                comando.assignedUsername(), comando.occurredAt());
+        PickupEventType tipo;
+        try {
+            tipo = pickup.reprogramar(comando.scheduledDate(), comando.timeSlot(),
+                    comando.assignedUsername(), comando.occurredAt());
+        } catch (TransicionDeRecogidaInvalidaException | ReprogramacionSinCambiosException ex) {
+            rechazar(comando, pickup, ex);
+            return;
+        }
 
         recogidas.save(pickup);
         String detalle = "De " + fechaAnterior + " a " + comando.scheduledDate() + " " + comando.timeSlot();
@@ -118,7 +146,12 @@ public class EjecutarComandoDeRecogida {
         }
         PickupStatus anterior = pickup.getStatus();
 
-        pickup.cancelar(comando.occurredAt());
+        try {
+            pickup.cancelar(comando.occurredAt());
+        } catch (TransicionDeRecogidaInvalidaException ex) {
+            rechazar(comando, pickup, ex);
+            return;
+        }
 
         recogidas.save(pickup);
         registrar(comando, PickupEventType.CANCELLED, anterior, pickup.getStatus(), comando.reason());
@@ -131,7 +164,12 @@ public class EjecutarComandoDeRecogida {
         }
         PickupStatus anterior = pickup.getStatus();
 
-        pickup.despachar(comando.occurredAt());
+        try {
+            pickup.despachar(comando.occurredAt());
+        } catch (TransicionDeRecogidaInvalidaException ex) {
+            rechazar(comando, pickup, ex);
+            return;
+        }
 
         recogidas.save(pickup);
         registrar(comando, PickupEventType.DISPATCHED, anterior, pickup.getStatus(), null);
@@ -144,7 +182,12 @@ public class EjecutarComandoDeRecogida {
         }
         PickupStatus anterior = pickup.getStatus();
 
-        pickup.completar(comando.occurredAt());
+        try {
+            pickup.completar(comando.occurredAt());
+        } catch (TransicionDeRecogidaInvalidaException ex) {
+            rechazar(comando, pickup, ex);
+            return;
+        }
 
         recogidas.save(pickup);
         registrar(comando, PickupEventType.COMPLETED, anterior, pickup.getStatus(), null);
@@ -162,9 +205,19 @@ public class EjecutarComandoDeRecogida {
         PickupStatus anterior = pickup.getStatus();
         boolean yaVinculado = pickup.getShipmentTrackingNumber() != null;
 
-        validarEnvio(comando.shipmentTrackingNumber(), pickup.getCityId(), comando.pickupNumber());
-
-        pickup.vincularEnvio(comando.shipmentTrackingNumber(), comando.occurredAt());
+        try {
+            validarEnvio(comando.shipmentTrackingNumber(), pickup.getCityId(), comando.pickupNumber());
+        } catch (EnvioYaEnRecorridoException | EnvioYaVinculadoException
+                | EnvioVinculadoNoEncontradoException | EnvioVinculadoFueraDeCiudadException ex) {
+            rechazar(comando, pickup, ex);
+            return;
+        }
+        try {
+            pickup.vincularEnvio(comando.shipmentTrackingNumber(), comando.occurredAt());
+        } catch (TransicionDeRecogidaInvalidaException | IllegalStateException ex) {
+            rechazar(comando, pickup, ex);
+            return;
+        }
 
         recogidas.save(pickup);
         registrar(comando, PickupEventType.SHIPMENT_LINKED, anterior, pickup.getStatus(),
@@ -200,6 +253,27 @@ public class EjecutarComandoDeRecogida {
         envios.exigir(trackingNumber, ciudad);
         if (recogidas.existsActiveByShipmentExcept(trackingNumber, pickupNumber)) {
             throw new EnvioYaVinculadoException(trackingNumber);
+        }
+    }
+
+    private void rechazar(RecogidaComando comando, Pickup pickup, RuntimeException causa) {
+        registrar(comando, PickupEventType.REJECTED, pickup.getStatus(), pickup.getStatus(),
+                detalleLimitado(comando.comando() + ": " + causa.getMessage()));
+    }
+
+    private String detalleLimitado(String detalle) {
+        return detalle.length() <= 500 ? detalle : detalle.substring(0, 500);
+    }
+
+    private String eventoGuiaId(String eventId) {
+        if (eventId.length() <= 250) {
+            return eventId + ":guia";
+        }
+        try {
+            byte[] hash = MessageDigest.getInstance("SHA-256").digest(eventId.getBytes(StandardCharsets.UTF_8));
+            return "guia:sha256:" + HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 no está disponible", ex);
         }
     }
 

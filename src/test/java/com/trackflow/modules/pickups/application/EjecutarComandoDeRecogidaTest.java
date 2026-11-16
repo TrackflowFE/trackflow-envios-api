@@ -9,6 +9,7 @@ import com.trackflow.modules.pickups.domain.Pickup;
 import com.trackflow.modules.pickups.domain.PickupNumber;
 import com.trackflow.modules.pickups.domain.PickupEvent;
 import com.trackflow.modules.pickups.domain.PickupEventType;
+import com.trackflow.modules.pickups.domain.PickupStatus;
 import com.trackflow.modules.pickups.domain.EnvioYaVinculadoException;
 import com.trackflow.modules.pickups.domain.EnvioYaEnRecorridoException;
 import com.trackflow.shared.events.PickupCompletedEvent;
@@ -16,8 +17,11 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
+import java.util.HashSet;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.dao.DataIntegrityViolationException;
 
 class EjecutarComandoDeRecogidaTest {
     private static final String NUMBER = "RC0123456789AB";
@@ -91,13 +95,20 @@ class EjecutarComandoDeRecogidaTest {
     }
 
     @Test
-    void rechazaGuiaDuplicadaAlConsumir() {
+    void creaSinGuiaSiYaEstaVinculada() {
         when(repository.existsActiveByShipmentExcept("TF0123456789AB", null)).thenReturn(true);
         RecogidaComando crear = new RecogidaComando("e1", RecogidaComando.Tipo.CREAR, NUMBER, "remitente", NOW,
                 "Calle 1", 1L, "Ana", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
                 PackageSize.MEDIUM, BigDecimal.ONE, "TF0123456789AB", null, null);
-        assertThrows(EnvioYaVinculadoException.class, () -> service.ejecutar(crear));
-        verify(repository, never()).save(any());
+        service.ejecutar(crear);
+        ArgumentCaptor<Pickup> pickup = ArgumentCaptor.forClass(Pickup.class);
+        verify(repository).save(pickup.capture());
+        assertNull(pickup.getValue().getShipmentTrackingNumber());
+        ArgumentCaptor<PickupEvent> evento = ArgumentCaptor.forClass(PickupEvent.class);
+        verify(events, times(2)).save(evento.capture());
+        assertEquals(PickupEventType.CREATED, evento.getAllValues().getFirst().getType());
+        assertEquals(PickupEventType.REJECTED, evento.getAllValues().getLast().getType());
+        assertEquals("e1:guia", evento.getAllValues().getLast().getEventId());
     }
 
     @Test
@@ -109,14 +120,84 @@ class EjecutarComandoDeRecogidaTest {
         recogida(null);
         RecogidaComando vincular = command(RecogidaComando.Tipo.VINCULAR, guia);
         doThrow(new EnvioYaEnRecorridoException(guia)).when(envios).exigir(guia, 1L);
-        assertThrows(EnvioYaEnRecorridoException.class, () -> service.ejecutar(crear));
-        assertThrows(EnvioYaEnRecorridoException.class, () -> service.ejecutar(vincular));
+        service.ejecutar(crear);
+        service.ejecutar(vincular);
         doNothing().when(envios).exigir(guia, 1L);
         when(repository.existsActiveByShipmentExcept(guia, null)).thenReturn(true);
         when(repository.existsActiveByShipmentExcept(guia, NUMBER)).thenReturn(true);
-        assertThrows(EnvioYaVinculadoException.class, () -> service.ejecutar(crear));
-        assertThrows(EnvioYaVinculadoException.class, () -> service.ejecutar(vincular));
+        service.ejecutar(crear);
+        service.ejecutar(vincular);
+        verify(repository, times(2)).save(any());
+        ArgumentCaptor<PickupEvent> evento = ArgumentCaptor.forClass(PickupEvent.class);
+        verify(events, times(6)).save(evento.capture());
+        assertEquals(4, evento.getAllValues().stream().filter(e -> e.getType() == PickupEventType.REJECTED).count());
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void cancelacionEnCaminoSeRechazaUnaSolaVezSinCambiarEstado() {
+        Pickup pickup = recogida(null);
+        Set<String> ids = new HashSet<>();
+        when(events.existsByEventId(any())).thenAnswer(inv -> ids.contains(inv.getArgument(0)));
+        when(events.save(any())).thenAnswer(inv -> {
+            PickupEvent event = inv.getArgument(0);
+            ids.add(event.getEventId());
+            return event;
+        });
+        RecogidaComando cancelar = command(RecogidaComando.Tipo.CANCELAR, null);
+        service.ejecutar(cancelar);
+        service.ejecutar(cancelar);
+        ArgumentCaptor<PickupEvent> evento = ArgumentCaptor.forClass(PickupEvent.class);
+        verify(events).save(evento.capture());
+        assertEquals(PickupEventType.REJECTED, evento.getValue().getType());
+        assertEquals(PickupStatus.ON_THE_WAY, evento.getValue().getPreviousStatus());
+        assertEquals(PickupStatus.ON_THE_WAY, evento.getValue().getNewStatus());
+        assertEquals("operador", evento.getValue().getActorUsername());
+        assertTrue(evento.getValue().getDetail().startsWith("CANCELAR: "));
+        assertEquals(PickupStatus.ON_THE_WAY, pickup.getStatus());
         verify(repository, never()).save(any());
+        verifyNoInteractions(publisher);
+    }
+
+    @Test
+    void crearConGuiaAvanzadaConservaHashYEventoIdLargoAcotado() {
+        String id = "x".repeat(255);
+        String guia = "TF0123456789AB";
+        doThrow(new EnvioYaEnRecorridoException(guia)).when(envios).exigir(guia, 1L);
+        RecogidaComando crear = new RecogidaComando(id, RecogidaComando.Tipo.CREAR, NUMBER, "remitente", NOW,
+                "Calle 1", 1L, "Ana", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
+                PackageSize.MEDIUM, BigDecimal.ONE, guia, null, null, "hash");
+        service.ejecutar(crear);
+        ArgumentCaptor<Pickup> pickup = ArgumentCaptor.forClass(Pickup.class);
+        verify(repository).save(pickup.capture());
+        assertNull(pickup.getValue().getShipmentTrackingNumber());
+        assertEquals("hash", pickup.getValue().getManagementCodeHash());
+        ArgumentCaptor<PickupEvent> eventos = ArgumentCaptor.forClass(PickupEvent.class);
+        verify(events, times(2)).save(eventos.capture());
+        PickupEvent rechazo = eventos.getAllValues().getLast();
+        assertEquals(PickupEventType.REJECTED, rechazo.getType());
+        assertTrue(rechazo.getEventId().length() <= 255);
+        assertTrue(rechazo.getDetail().contains(guia));
+        assertEquals(PickupStatus.REQUESTED, rechazo.getPreviousStatus());
+        assertEquals(PickupStatus.REQUESTED, rechazo.getNewStatus());
+    }
+
+    @Test
+    void erroresTecnicosYConflictosDeIndiceSePropagan() {
+        RecogidaComando crear = new RecogidaComando("e1", RecogidaComando.Tipo.CREAR, NUMBER, "operador", NOW,
+                "Calle 1", 1L, "Ana", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
+                PackageSize.MEDIUM, BigDecimal.ONE, "TF0123456789AB", null, null);
+        doThrow(new DataIntegrityViolationException("unique index")).when(repository).save(any());
+        assertThrows(DataIntegrityViolationException.class, () -> service.ejecutar(crear));
+        verify(events, never()).save(any());
+    }
+
+    @Test
+    void falloDePersistenciaNoSeConvierteEnRechazo() {
+        recogida(null);
+        doThrow(new IllegalStateException("fallo tecnico")).when(repository).save(any());
+        assertThrows(IllegalStateException.class,
+                () -> service.ejecutar(command(RecogidaComando.Tipo.COMPLETAR, null)));
         verify(events, never()).save(any());
         verifyNoInteractions(publisher);
     }

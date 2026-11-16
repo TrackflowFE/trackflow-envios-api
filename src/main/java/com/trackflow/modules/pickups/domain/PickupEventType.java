@@ -13,5 +13,6 @@ public enum PickupEventType {
     CANCELLED,
     DISPATCHED,
     COMPLETED,
-    SHIPMENT_LINKED
+    SHIPMENT_LINKED,
+    REJECTED
 }
