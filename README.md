@@ -96,6 +96,8 @@ La API guarda `pickup.completed` en `pickup_outbox` dentro de la transacción de
 
 El comando de recogida viaja con `eventId`, `comando` (`CREAR`, `REPROGRAMAR`, `CANCELAR`, `DESPACHAR`, `COMPLETAR`, `VINCULAR`), `pickupNumber`, `actor` y `occurredAt`, más los datos que ese comando usa. El broker entrega al menos una vez: la reentrega se descarta por `eventId`.
 
+Si al aplicar el comando la recogida ya no existe (una entrega tardía o un mensaje de otro entorno), el consumidor guarda un evento `REJECTED` con el número recibido y confirma el mensaje en vez de enviarlo a `pickups.requests.dlq`: reintentarlo no cambiaría el resultado.
+
 El comando `CREAR` y `pickups.requests.dlq` contienen dirección y teléfono en claro y el hash del código. Restringir mediante ACL en CloudAMQP el acceso a las colas y sus respaldos, limitar su retención y usar TLS; estas acciones requieren configuración operativa y no las aplica este repositorio. Supervisar las colas de descartados, también la de logística: un confirm del broker no acredita que logística aplicó la custodia. Las comprobaciones al admitir y consumir reducen carreras pero una guía puede avanzar después; un 202 puede terminar descartado y no existe reconciliación automática. El publicador de comandos tampoco espera confirmación del broker.
 
 ## Base de datos

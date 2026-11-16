@@ -59,13 +59,22 @@ public class EjecutarComandoDeRecogida {
             return;
         }
 
-        switch (comando.comando()) {
-            case CREAR -> crear(comando);
-            case REPROGRAMAR -> reprogramar(comando);
-            case CANCELAR -> cancelar(comando);
-            case DESPACHAR -> despachar(comando);
-            case COMPLETAR -> completar(comando);
-            case VINCULAR -> vincular(comando);
+        try {
+            switch (comando.comando()) {
+                case CREAR -> crear(comando);
+                case REPROGRAMAR -> reprogramar(comando);
+                case CANCELAR -> cancelar(comando);
+                case DESPACHAR -> despachar(comando);
+                case COMPLETAR -> completar(comando);
+                case VINCULAR -> vincular(comando);
+            }
+        } catch (RecogidaNoEncontradaException ex) {
+            // Un comando puede llegar después de que la recogida ya no exista (entrega
+            // tardía o mensaje de otro entorno). Reintentarlo no lo va a resolver, así
+            // que se deja constancia y se confirma el mensaje en vez de enviarlo a la
+            // cola de descartados.
+            registrar(comando, PickupEventType.REJECTED, null, null,
+                    detalleLimitado(comando.comando() + ": " + ex.getMessage()));
         }
     }
 

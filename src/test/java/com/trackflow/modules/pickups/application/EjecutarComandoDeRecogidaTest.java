@@ -201,4 +201,19 @@ class EjecutarComandoDeRecogidaTest {
         verify(events, never()).save(any());
         verifyNoInteractions(publisher);
     }
+
+    @Test
+    void comandoDeRecogidaInexistenteDejaRechazoYNoPropaga() {
+        when(repository.findByNumberForUpdate(NUMBER)).thenReturn(Optional.empty());
+        service.ejecutar(command(RecogidaComando.Tipo.CANCELAR, null));
+        ArgumentCaptor<PickupEvent> evento = ArgumentCaptor.forClass(PickupEvent.class);
+        verify(events).save(evento.capture());
+        assertEquals(PickupEventType.REJECTED, evento.getValue().getType());
+        assertEquals(NUMBER, evento.getValue().getPickupNumber());
+        assertNull(evento.getValue().getPreviousStatus());
+        assertNull(evento.getValue().getNewStatus());
+        assertTrue(evento.getValue().getDetail().startsWith("CANCELAR: "));
+        verify(repository, never()).save(any());
+        verifyNoInteractions(publisher);
+    }
 }
