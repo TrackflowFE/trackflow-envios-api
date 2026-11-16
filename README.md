@@ -181,3 +181,17 @@ El archivo `render.yaml` define el servicio: Docker, plan gratuito, región Ohio
 - `POST /api/admin/rebuild-projections` solo vuelve a publicar los envíos. La republicación de eventos logísticos la expone la API 3.
 - Los envíos recogidos a domicilio (HU-20) pasan al estado `IN_CUSTODY`, entre `REGISTERED` y `AT_DISTRIBUTION_CENTER`: el paquete ya está en la empresa, pero todavía no ha entrado a un centro. Ese estado lo aplica el evento `logistics.event.registered` que publica la API 3 al registrar la recogida.
 - La admisión y la aplicación de los comandos de recogida son dos pasos: quien pide una recogida recibe el número `RC…` al momento, pero el registro en la base ocurre cuando el consumidor de la cola procesa el comando. Si se consulta en medio, puede salir un 404 o el estado anterior.
+
+## Verificación de la HU-20
+
+Estos escenarios se comprueban con la API levantada contra los servicios aislados de la
+sección anterior, sin tocar la base de despliegue:
+
+- Un comando de recogida que llega tarde, cuando la recogida ya no existe, deja un
+  evento `REJECTED` en `pickup_events` y `pickups.requests.dlq` sigue vacía.
+- La petición que excede el límite de intentos responde 429 con la cabecera
+  `Retry-After` y con las cabeceras CORS, de modo que el navegador puede leerla.
+- Un 404 en una subruta que no existe no consume la cuota de la recogida: solo lo hacen
+  las rutas que autentican con el código de gestión.
+- Un número inexistente y un código incorrecto responden el mismo 404 y el mismo
+  mensaje: no revelan cuál de los dos falló.
