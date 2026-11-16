@@ -1,6 +1,8 @@
 package com.trackflow.modules.pickups.application;
 
 import com.trackflow.modules.pickups.domain.Pickup;
+import com.trackflow.modules.pickups.domain.CodigoDeGestionInvalidoException;
+import com.trackflow.modules.pickups.domain.PickupNumber;
 import com.trackflow.modules.pickups.domain.PickupEvent;
 import com.trackflow.modules.pickups.domain.PickupStatus;
 import com.trackflow.modules.pickups.domain.RecogidaNoEncontradaException;
@@ -23,21 +25,35 @@ public class ConsultarRecogidas {
     private final PickupRepository recogidas;
     private final PickupEventRepository eventos;
     private final CatalogoDeCiudades ciudades;
+    private final CodigosDeGestion codigos;
 
-    public ConsultarRecogidas(PickupRepository recogidas, PickupEventRepository eventos, CatalogoDeCiudades ciudades) {
+    public ConsultarRecogidas(PickupRepository recogidas, PickupEventRepository eventos, CatalogoDeCiudades ciudades,
+            CodigosDeGestion codigos) {
         this.recogidas = recogidas;
         this.eventos = eventos;
         this.ciudades = ciudades;
+        this.codigos = codigos;
     }
 
     /**
      * @param solicitante el usuario que consulta, o null si no hay sesión abierta
      */
     public VistaDeRecogida una(String pickupNumber, String solicitante) {
+        PickupNumber.of(pickupNumber);
         Pickup pickup = recogidas.findByNumber(pickupNumber)
                 .orElseThrow(() -> new RecogidaNoEncontradaException(pickupNumber));
 
         return vista(pickup, solicitante);
+    }
+
+    public VistaDeRecogida delRemitente(String pickupNumber, String codigo) {
+        Pickup pickup = recogidas.findByNumber(pickupNumber).orElse(null);
+        boolean valido = codigos.coincide(codigo, pickup == null ? null : pickup.getManagementCodeHash());
+        if (pickup == null || !pickup.admiteAutogestion() || !valido) {
+            throw new CodigoDeGestionInvalidoException();
+        }
+        String ciudad = ciudades.porId(pickup.getCityId()).map(Ciudad::etiqueta).orElse(null);
+        return new VistaDeRecogida(pickup, ciudad, eventos.findByPickupNumber(pickupNumber), true);
     }
 
     public List<VistaDeRecogida> listar(PickupStatus status, String solicitante, boolean soloAsignadas) {

@@ -3,6 +3,7 @@ package com.trackflow.modules.pickups.api.dto;
 import com.trackflow.modules.pickups.application.VistaDeRecogida;
 import com.trackflow.modules.pickups.domain.Pickup;
 import com.trackflow.modules.pickups.domain.PickupEvent;
+import com.trackflow.modules.pickups.domain.PickupEventType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -49,7 +50,7 @@ public record RecogidaResponse(
                     evento.getType().name(),
                     evento.getPreviousStatus() == null ? null : evento.getPreviousStatus().name(),
                     evento.getNewStatus() == null ? null : evento.getNewStatus().name(),
-                    visible ? evento.getDetail() : null,
+                    visible || evento.getType() != PickupEventType.CANCELLED ? evento.getDetail() : null,
                     evento.getActorUsername(),
                     evento.getOccurredAt());
         }

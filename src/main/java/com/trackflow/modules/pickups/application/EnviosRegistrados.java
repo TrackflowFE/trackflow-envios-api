@@ -2,6 +2,7 @@ package com.trackflow.modules.pickups.application;
 
 import com.trackflow.modules.pickups.domain.EnvioVinculadoFueraDeCiudadException;
 import com.trackflow.modules.pickups.domain.EnvioVinculadoNoEncontradoException;
+import com.trackflow.modules.pickups.domain.EnvioYaEnRecorridoException;
 import java.util.Optional;
 
 /**
@@ -14,7 +15,7 @@ import java.util.Optional;
 public interface EnviosRegistrados {
 
     /** Un envío del que solo hace falta el número y su ciudad de origen. */
-    record EnvioRegistrado(String trackingNumber, Long originCityId) {
+    record EnvioRegistrado(String trackingNumber, Long originCityId, String status) {
     }
 
     Optional<EnvioRegistrado> buscar(String trackingNumber);
@@ -30,6 +31,9 @@ public interface EnviosRegistrados {
 
         if (!envio.originCityId().equals(ciudadRecogida)) {
             throw new EnvioVinculadoFueraDeCiudadException(trackingNumber, ciudadRecogida);
+        }
+        if (!"REGISTERED".equals(envio.status())) {
+            throw new EnvioYaEnRecorridoException(trackingNumber);
         }
     }
 }

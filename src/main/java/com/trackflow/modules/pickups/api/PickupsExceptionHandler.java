@@ -1,6 +1,10 @@
 package com.trackflow.modules.pickups.api;
 
 import com.trackflow.modules.pickups.domain.DiaNoOperativoException;
+import com.trackflow.modules.pickups.domain.CodigoDeGestionInvalidoException;
+import com.trackflow.modules.pickups.domain.EnvioYaEnRecorridoException;
+import com.trackflow.modules.pickups.domain.EnvioYaVinculadoException;
+import com.trackflow.modules.pickups.domain.ReprogramacionSinCambiosException;
 import com.trackflow.modules.pickups.domain.EnvioVinculadoFueraDeCiudadException;
 import com.trackflow.modules.pickups.domain.EnvioVinculadoNoEncontradoException;
 import com.trackflow.modules.pickups.domain.FechaDeRecogidaEnElPasadoException;
@@ -23,8 +27,29 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * en el detalle, porque quien pide la recogida necesita saber qué corregir: una
  * fecha que ya pasó y una franja que no existe son problemas distintos.
  */
-@RestControllerAdvice(assignableTypes = PickupController.class)
+@RestControllerAdvice(assignableTypes = {PickupController.class, PickupSelfServiceController.class})
 public class PickupsExceptionHandler {
+
+    @ExceptionHandler(CodigoDeGestionInvalidoException.class)
+    ProblemDetail codigoInvalido(CodigoDeGestionInvalidoException e) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        problema.setTitle("Recogida no encontrada");
+        return problema;
+    }
+
+    @ExceptionHandler({EnvioYaEnRecorridoException.class, EnvioYaVinculadoException.class})
+    ProblemDetail envioNoDisponible(RuntimeException e) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+        problema.setTitle("Envío no disponible para recogida");
+        return problema;
+    }
+
+    @ExceptionHandler(ReprogramacionSinCambiosException.class)
+    ProblemDetail sinCambios(ReprogramacionSinCambiosException e) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, e.getMessage());
+        problema.setTitle("Reprogramación sin cambios");
+        return problema;
+    }
 
     @ExceptionHandler(RecogidaNoEncontradaException.class)
     ProblemDetail recogidaNoEncontrada(RecogidaNoEncontradaException e) {
@@ -114,7 +139,7 @@ public class PickupsExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail numeroInvalido(IllegalArgumentException e) {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
-        problema.setTitle("Número de recogida inválido");
+        problema.setTitle("Solicitud inválida");
         return problema;
     }
 }

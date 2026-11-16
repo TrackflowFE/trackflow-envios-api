@@ -5,6 +5,7 @@ import com.trackflow.modules.pickups.domain.PickupEvent;
 import com.trackflow.modules.pickups.domain.PickupEventType;
 import com.trackflow.modules.pickups.domain.PickupNumber;
 import com.trackflow.modules.pickups.domain.PickupStatus;
+import com.trackflow.modules.pickups.domain.EnvioYaVinculadoException;
 import com.trackflow.modules.pickups.domain.RecogidaNoEncontradaException;
 import com.trackflow.shared.events.PickupCompletedEvent;
 import java.time.Instant;
@@ -32,12 +33,14 @@ public class EjecutarComandoDeRecogida {
     private final PickupRepository recogidas;
     private final PickupEventRepository eventos;
     private final RecogidaCompletadaPublisher completada;
+    private final EnviosRegistrados envios;
 
     public EjecutarComandoDeRecogida(PickupRepository recogidas, PickupEventRepository eventos,
-            RecogidaCompletadaPublisher completada) {
+            RecogidaCompletadaPublisher completada, EnviosRegistrados envios) {
         this.recogidas = recogidas;
         this.eventos = eventos;
         this.completada = completada;
+        this.envios = envios;
     }
 
     @Transactional
@@ -64,6 +67,9 @@ public class EjecutarComandoDeRecogida {
             return;
         }
 
+        if (comando.shipmentTrackingNumber() != null && !comando.shipmentTrackingNumber().isBlank()) {
+            validarEnvio(comando.shipmentTrackingNumber(), comando.cityId(), null);
+        }
         Pickup pickup = Pickup.registrar(numero,
                 comando.address(),
                 comando.cityId(),
@@ -76,7 +82,8 @@ public class EjecutarComandoDeRecogida {
                 comando.shipmentTrackingNumber(),
                 comando.assignedUsername(),
                 comando.actor(),
-                comando.occurredAt());
+                comando.occurredAt(),
+                comando.managementCodeHash());
 
         recogidas.save(pickup);
         registrar(comando, PickupEventType.CREATED, null, pickup.getStatus(), null);
@@ -89,12 +96,19 @@ public class EjecutarComandoDeRecogida {
         }
         PickupStatus anterior = pickup.getStatus();
 
+        String fechaAnterior = pickup.getScheduledDate() + " " + pickup.getTimeSlot();
+        String responsableAnterior = pickup.getAssignedUsername();
+
         PickupEventType tipo = pickup.reprogramar(comando.scheduledDate(), comando.timeSlot(),
                 comando.assignedUsername(), comando.occurredAt());
 
         recogidas.save(pickup);
-        registrar(comando, tipo, anterior, pickup.getStatus(),
-                "Fecha " + comando.scheduledDate() + ", franja " + comando.timeSlot());
+        String detalle = "De " + fechaAnterior + " a " + comando.scheduledDate() + " " + comando.timeSlot();
+        if (tipo == PickupEventType.ASSIGNED) {
+            detalle += "; asignada a " + comando.assignedUsername() + " (antes "
+                    + (responsableAnterior == null ? "sin asignar" : responsableAnterior) + ")";
+        }
+        registrar(comando, tipo, anterior, pickup.getStatus(), detalle);
     }
 
     private void cancelar(RecogidaComando comando) {
@@ -148,6 +162,8 @@ public class EjecutarComandoDeRecogida {
         PickupStatus anterior = pickup.getStatus();
         boolean yaVinculado = pickup.getShipmentTrackingNumber() != null;
 
+        validarEnvio(comando.shipmentTrackingNumber(), pickup.getCityId(), comando.pickupNumber());
+
         pickup.vincularEnvio(comando.shipmentTrackingNumber(), comando.occurredAt());
 
         recogidas.save(pickup);
@@ -178,6 +194,13 @@ public class EjecutarComandoDeRecogida {
     private Pickup cargar(String pickupNumber) {
         return recogidas.findByNumberForUpdate(pickupNumber)
                 .orElseThrow(() -> new RecogidaNoEncontradaException(pickupNumber));
+    }
+
+    private void validarEnvio(String trackingNumber, Long ciudad, String pickupNumber) {
+        envios.exigir(trackingNumber, ciudad);
+        if (recogidas.existsActiveByShipmentExcept(trackingNumber, pickupNumber)) {
+            throw new EnvioYaVinculadoException(trackingNumber);
+        }
     }
 
     private void registrar(RecogidaComando comando, PickupEventType tipo, PickupStatus anterior,

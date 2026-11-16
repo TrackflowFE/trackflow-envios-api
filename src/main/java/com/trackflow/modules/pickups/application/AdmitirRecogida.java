@@ -1,11 +1,14 @@
 package com.trackflow.modules.pickups.application;
 
 import com.trackflow.modules.pickups.domain.HorarioDeRecogida;
+import com.trackflow.modules.pickups.domain.CodigoDeGestionInvalidoException;
+import com.trackflow.modules.pickups.domain.EnvioYaVinculadoException;
 import com.trackflow.modules.pickups.domain.PackageSize;
 import com.trackflow.modules.pickups.domain.Pickup;
 import com.trackflow.modules.pickups.domain.PickupNumber;
 import com.trackflow.modules.pickups.domain.PickupStatus;
 import com.trackflow.modules.pickups.domain.RecogidaNoEncontradaException;
+import com.trackflow.modules.pickups.domain.ReprogramacionSinCambiosException;
 import com.trackflow.modules.pickups.domain.TransicionDeRecogidaInvalidaException;
 import com.trackflow.shared.geografia.CatalogoDeCiudades;
 import java.math.BigDecimal;
@@ -13,6 +16,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 /**
@@ -53,10 +57,11 @@ public class AdmitirRecogida {
     private final EnviosRegistrados envios;
     private final PickupRepository recogidas;
     private final Clock clock;
+    private final CodigosDeGestion codigos;
 
     public AdmitirRecogida(PickupNumberGenerator numeros, RecogidaComandoPublisher publisher,
             CatalogoDeCiudades ciudades, HorarioDeRecogida horario, OperadoresDisponibles operadores,
-            EnviosRegistrados envios, PickupRepository recogidas, Clock clock) {
+            EnviosRegistrados envios, PickupRepository recogidas, Clock clock, CodigosDeGestion codigos) {
         this.numeros = numeros;
         this.publisher = publisher;
         this.ciudades = ciudades;
@@ -65,6 +70,7 @@ public class AdmitirRecogida {
         this.envios = envios;
         this.recogidas = recogidas;
         this.clock = clock;
+        this.codigos = codigos;
     }
 
     /** Admite el registro de una recogida nueva y encola la solicitud. */
@@ -80,10 +86,11 @@ public class AdmitirRecogida {
             operadores.exigir(solicitud.assignedUsername());
         }
         if (tieneTexto(solicitud.shipmentTrackingNumber())) {
-            envios.exigir(solicitud.shipmentTrackingNumber(), solicitud.cityId());
+            validarEnvio(solicitud.shipmentTrackingNumber(), solicitud.cityId(), null);
         }
 
         PickupNumber numero = numeros.next();
+        String codigo = codigos.generar();
 
         RecogidaComando comando = new RecogidaComando(
                 UUID.randomUUID().toString(),
@@ -101,11 +108,12 @@ public class AdmitirRecogida {
                 solicitud.weightKg(),
                 solicitud.shipmentTrackingNumber(),
                 solicitud.assignedUsername(),
-                null);
+                null,
+                codigos.hash(codigo));
 
         publisher.publicar(comando);
 
-        return new RecogidaSolicitada(comando.eventId(), numero.value(), PickupStatus.REQUESTED.name(), ahora);
+        return new RecogidaSolicitada(comando.eventId(), numero.value(), PickupStatus.REQUESTED.name(), ahora, codigo);
     }
 
     /** Admite cambiar la fecha o la franja de una recogida, y asignarla a un operador. */
@@ -113,6 +121,11 @@ public class AdmitirRecogida {
         Pickup pickup = exigir(pickupNumber);
         if (!pickup.getStatus().admiteReprogramacion()) {
             throw new TransicionDeRecogidaInvalidaException(pickupNumber, pickup.getStatus(), "reprogramar");
+        }
+
+        if (Objects.equals(fecha, pickup.getScheduledDate()) && Objects.equals(franja, pickup.getTimeSlot())
+                && (!tieneTexto(responsable) || responsable.equals(pickup.getAssignedUsername()))) {
+            throw new ReprogramacionSinCambiosException();
         }
 
         Instant ahora = clock.instant();
@@ -189,7 +202,7 @@ public class AdmitirRecogida {
             throw new IllegalStateException("La recogida ya está vinculada a otro envío");
         }
 
-        envios.exigir(trackingNumber, pickup.getCityId());
+        validarEnvio(trackingNumber, pickup.getCityId(), pickupNumber);
 
         publisher.publicar(new RecogidaComando(
                 UUID.randomUUID().toString(),
@@ -217,6 +230,31 @@ public class AdmitirRecogida {
     private Pickup exigir(String pickupNumber) {
         return recogidas.findByNumber(pickupNumber)
                 .orElseThrow(() -> new RecogidaNoEncontradaException(pickupNumber));
+    }
+
+    public void reprogramarComoRemitente(String pickupNumber, String codigo, LocalDate fecha, String franja) {
+        exigirCodigo(pickupNumber, codigo);
+        reprogramar(pickupNumber, fecha, franja, null, "remitente");
+    }
+
+    public void cancelarComoRemitente(String pickupNumber, String codigo, String motivo) {
+        exigirCodigo(pickupNumber, codigo);
+        cancelar(pickupNumber, motivo, "remitente");
+    }
+
+    private void exigirCodigo(String pickupNumber, String codigo) {
+        Pickup pickup = recogidas.findByNumber(pickupNumber).orElse(null);
+        boolean valido = codigos.coincide(codigo, pickup == null ? null : pickup.getManagementCodeHash());
+        if (pickup == null || !pickup.admiteAutogestion() || !valido) {
+            throw new CodigoDeGestionInvalidoException();
+        }
+    }
+
+    private void validarEnvio(String trackingNumber, Long ciudad, String pickupNumber) {
+        envios.exigir(trackingNumber, ciudad);
+        if (recogidas.existsActiveByShipmentExcept(trackingNumber, pickupNumber)) {
+            throw new EnvioYaVinculadoException(trackingNumber);
+        }
     }
 
     private static boolean tieneTexto(String valor) {

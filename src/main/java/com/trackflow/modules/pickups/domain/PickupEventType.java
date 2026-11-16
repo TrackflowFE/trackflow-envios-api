@@ -6,6 +6,7 @@ package com.trackflow.modules.pickups.domain;
  * está la recogida ahora, sino cómo llegó a estar así.
  */
 public enum PickupEventType {
+    RESCHEDULED,
     CREATED,
     SCHEDULED,
     ASSIGNED,

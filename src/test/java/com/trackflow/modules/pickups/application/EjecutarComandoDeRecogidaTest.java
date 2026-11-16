@@ -7,6 +7,10 @@ import static org.mockito.Mockito.*;
 import com.trackflow.modules.pickups.domain.PackageSize;
 import com.trackflow.modules.pickups.domain.Pickup;
 import com.trackflow.modules.pickups.domain.PickupNumber;
+import com.trackflow.modules.pickups.domain.PickupEvent;
+import com.trackflow.modules.pickups.domain.PickupEventType;
+import com.trackflow.modules.pickups.domain.EnvioYaVinculadoException;
+import com.trackflow.modules.pickups.domain.EnvioYaEnRecorridoException;
 import com.trackflow.shared.events.PickupCompletedEvent;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -21,7 +25,8 @@ class EjecutarComandoDeRecogidaTest {
     private final PickupRepository repository = mock(PickupRepository.class);
     private final PickupEventRepository events = mock(PickupEventRepository.class);
     private final RecogidaCompletadaPublisher publisher = mock(RecogidaCompletadaPublisher.class);
-    private final EjecutarComandoDeRecogida service = new EjecutarComandoDeRecogida(repository, events, publisher);
+    private final EnviosRegistrados envios = mock(EnviosRegistrados.class);
+    private final EjecutarComandoDeRecogida service = new EjecutarComandoDeRecogida(repository, events, publisher, envios);
 
     private Pickup recogida(String tracking) {
         Pickup p = Pickup.registrar(PickupNumber.of(NUMBER), "Calle 1", 1L, "Ana", "3001234567",
@@ -64,5 +69,55 @@ class EjecutarComandoDeRecogidaTest {
         when(events.existsByEventId("event-1")).thenReturn(true);
         service.ejecutar(command(RecogidaComando.Tipo.COMPLETAR, null));
         verifyNoInteractions(repository, publisher);
+    }
+
+    @Test
+    void guardaHashAlCrearYDetalleAnteriorAlReprogramar() {
+        RecogidaComando crear = new RecogidaComando("e1", RecogidaComando.Tipo.CREAR, NUMBER, "remitente", NOW,
+                "Calle 1", 1L, "Ana", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
+                PackageSize.MEDIUM, BigDecimal.ONE, null, null, null, "$2a$hash");
+        service.ejecutar(crear);
+        ArgumentCaptor<Pickup> pickup = ArgumentCaptor.forClass(Pickup.class);
+        verify(repository).save(pickup.capture());
+        assertEquals("$2a$hash", pickup.getValue().getManagementCodeHash());
+        when(repository.findByNumberForUpdate(NUMBER)).thenReturn(Optional.of(pickup.getValue()));
+        service.ejecutar(new RecogidaComando("e2", RecogidaComando.Tipo.REPROGRAMAR, NUMBER, "remitente", NOW,
+                null, null, null, null, LocalDate.of(2026, 11, 18), "10:00-12:00", null, null, null, null, null));
+        ArgumentCaptor<PickupEvent> evento = ArgumentCaptor.forClass(PickupEvent.class);
+        verify(events, times(2)).save(evento.capture());
+        assertEquals(PickupEventType.RESCHEDULED, evento.getAllValues().getLast().getType());
+        assertEquals("De 2026-11-17 08:00-10:00 a 2026-11-18 10:00-12:00",
+                evento.getAllValues().getLast().getDetail());
+    }
+
+    @Test
+    void rechazaGuiaDuplicadaAlConsumir() {
+        when(repository.existsActiveByShipmentExcept("TF0123456789AB", null)).thenReturn(true);
+        RecogidaComando crear = new RecogidaComando("e1", RecogidaComando.Tipo.CREAR, NUMBER, "remitente", NOW,
+                "Calle 1", 1L, "Ana", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
+                PackageSize.MEDIUM, BigDecimal.ONE, "TF0123456789AB", null, null);
+        assertThrows(EnvioYaVinculadoException.class, () -> service.ejecutar(crear));
+        verify(repository, never()).save(any());
+    }
+
+    @Test
+    void consumidorRevalidaGuiaEnCreacionYVinculacion() {
+        String guia = "TF0123456789AB";
+        RecogidaComando crear = new RecogidaComando("e1", RecogidaComando.Tipo.CREAR, NUMBER, "operador", NOW,
+                "Calle 1", 1L, "Ana", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
+                PackageSize.MEDIUM, BigDecimal.ONE, guia, null, null);
+        recogida(null);
+        RecogidaComando vincular = command(RecogidaComando.Tipo.VINCULAR, guia);
+        doThrow(new EnvioYaEnRecorridoException(guia)).when(envios).exigir(guia, 1L);
+        assertThrows(EnvioYaEnRecorridoException.class, () -> service.ejecutar(crear));
+        assertThrows(EnvioYaEnRecorridoException.class, () -> service.ejecutar(vincular));
+        doNothing().when(envios).exigir(guia, 1L);
+        when(repository.existsActiveByShipmentExcept(guia, null)).thenReturn(true);
+        when(repository.existsActiveByShipmentExcept(guia, NUMBER)).thenReturn(true);
+        assertThrows(EnvioYaVinculadoException.class, () -> service.ejecutar(crear));
+        assertThrows(EnvioYaVinculadoException.class, () -> service.ejecutar(vincular));
+        verify(repository, never()).save(any());
+        verify(events, never()).save(any());
+        verifyNoInteractions(publisher);
     }
 }

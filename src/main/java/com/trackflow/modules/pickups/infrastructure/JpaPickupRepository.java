@@ -37,6 +37,11 @@ public class JpaPickupRepository implements PickupRepository {
     }
 
     @Override
+    public boolean existsActiveByShipmentExcept(String trackingNumber, String pickupNumber) {
+        return jpa.existsActiveByShipmentExcept(trackingNumber, pickupNumber);
+    }
+
+    @Override
     public List<Pickup> search(PickupStatus status) {
         return status == null ? jpa.findAllByOrderByIdAsc() : jpa.findByStatus(status);
     }

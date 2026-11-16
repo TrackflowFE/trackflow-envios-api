@@ -88,7 +88,8 @@ public class PickupController {
                 null,
                 actorDe(jwt)));
 
-        return ResponseEntity.status(HttpStatus.ACCEPTED).body(RecogidaAdmitidaResponse.from(solicitud));
+        return ResponseEntity.status(HttpStatus.ACCEPTED).cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(RecogidaAdmitidaResponse.from(solicitud));
     }
 
     @GetMapping("/{pickupNumber}")

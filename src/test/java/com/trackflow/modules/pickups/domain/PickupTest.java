@@ -40,4 +40,19 @@ class PickupTest {
         assertThrows(TransicionDeRecogidaInvalidaException.class, () -> p.despachar(NOW));
         assertThrows(TransicionDeRecogidaInvalidaException.class, () -> p.vincularEnvio("TF0123456789AB", NOW));
     }
+
+    @Test
+    void reprogramarSinCambiosSeRechazaYDistingueAsignacion() {
+        Pickup p = pickup();
+        assertThrows(ReprogramacionSinCambiosException.class,
+                () -> p.reprogramar(p.getScheduledDate(), p.getTimeSlot(), null, NOW));
+        assertEquals(PickupEventType.RESCHEDULED,
+                p.reprogramar(LocalDate.of(2026, 11, 18), "08:00-10:00", null, NOW));
+        assertEquals(PickupStatus.REQUESTED, p.getStatus());
+        assertEquals(PickupEventType.ASSIGNED,
+                p.reprogramar(p.getScheduledDate(), p.getTimeSlot(), "operador", NOW));
+        assertEquals(PickupEventType.RESCHEDULED,
+                p.reprogramar(LocalDate.of(2026, 11, 19), "08:00-10:00", null, NOW));
+        assertEquals("operador", p.getAssignedUsername());
+    }
 }

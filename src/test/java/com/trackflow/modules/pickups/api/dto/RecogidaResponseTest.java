@@ -19,11 +19,14 @@ class RecogidaResponseTest {
                 PackageSize.MEDIUM, BigDecimal.ONE, null, null, "operador", now);
         PickupEvent event = new PickupEvent("e1", "RC0123456789AB", PickupEventType.CANCELLED,
                 PickupStatus.REQUESTED, PickupStatus.CANCELLED, "Direccion privada", "operador", now);
-        RecogidaResponse response = RecogidaResponse.from(new VistaDeRecogida(pickup, "Medellin", List.of(event), false));
+        PickupEvent horario = new PickupEvent("e2", "RC0123456789AB", PickupEventType.RESCHEDULED,
+                PickupStatus.REQUESTED, PickupStatus.REQUESTED, "De ayer a hoy", "operador", now);
+        RecogidaResponse response = RecogidaResponse.from(new VistaDeRecogida(pickup, "Medellin", List.of(event, horario), false));
         assertTrue(response.accessRestricted());
         assertNull(response.address());
         assertNull(response.contactName());
         assertNull(response.contactPhone());
         assertNull(response.history().getFirst().detail());
+        assertEquals("De ayer a hoy", response.history().get(1).detail());
     }
 }

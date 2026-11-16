@@ -17,6 +17,12 @@ public interface PickupJpaRepository extends JpaRepository<Pickup, Long> {
 
     boolean existsByPickupNumberValue(String pickupNumber);
 
+    @Query("select count(p) > 0 from Pickup p where p.shipmentTrackingNumber = :trackingNumber "
+            + "and p.status <> com.trackflow.modules.pickups.domain.PickupStatus.CANCELLED "
+            + "and (:pickupNumber is null or p.pickupNumber.value <> :pickupNumber)")
+    boolean existsActiveByShipmentExcept(@Param("trackingNumber") String trackingNumber,
+            @Param("pickupNumber") String pickupNumber);
+
     List<Pickup> findByStatus(PickupStatus status);
 
     List<Pickup> findAllByOrderByIdAsc();

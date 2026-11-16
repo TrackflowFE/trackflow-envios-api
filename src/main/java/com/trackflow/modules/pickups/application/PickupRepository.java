@@ -28,6 +28,8 @@ public interface PickupRepository {
 
     boolean existsByNumber(String pickupNumber);
 
+    boolean existsActiveByShipmentExcept(String trackingNumber, String pickupNumber);
+
     /** Todas las recogidas, o solo las de un estado, para el listado de la operación. */
     List<Pickup> search(PickupStatus status);
 }

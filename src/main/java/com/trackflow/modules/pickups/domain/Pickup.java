@@ -12,6 +12,7 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Objects;
 
 /**
  * Recogida a domicilio: la visita programada para buscar un paquete en la dirección
@@ -72,6 +73,9 @@ public class Pickup {
     @Column(name = "assigned_username", length = 50)
     private String assignedUsername;
 
+    @Column(name = "management_code_hash", length = 100)
+    private String managementCodeHash;
+
     @Column(name = "requested_by", nullable = false, length = 50)
     private String requestedBy;
 
@@ -111,6 +115,16 @@ public class Pickup {
                 packageSize, weightKg, shipmentTrackingNumber, assignedUsername, requestedBy, requestedAt);
     }
 
+    public static Pickup registrar(PickupNumber pickupNumber, String address, Long cityId, String contactName,
+            String contactPhone, LocalDate scheduledDate, String timeSlot, PackageSize packageSize, BigDecimal weightKg,
+            String shipmentTrackingNumber, String assignedUsername, String requestedBy, Instant requestedAt,
+            String managementCodeHash) {
+        Pickup pickup = registrar(pickupNumber, address, cityId, contactName, contactPhone, scheduledDate, timeSlot,
+                packageSize, weightKg, shipmentTrackingNumber, assignedUsername, requestedBy, requestedAt);
+        pickup.managementCodeHash = managementCodeHash;
+        return pickup;
+    }
+
     /**
      * Cambia la fecha o la franja y, si se indica un responsable, lo asigna.
      *
@@ -125,17 +139,22 @@ public class Pickup {
             throw new TransicionDeRecogidaInvalidaException(pickupNumber.value(), status, "reprogramar");
         }
 
+        boolean cambiaResponsable = responsable != null && !responsable.isBlank()
+                && !responsable.equals(this.assignedUsername);
+        if (Objects.equals(scheduledDate, fecha) && Objects.equals(timeSlot, franja) && !cambiaResponsable) {
+            throw new ReprogramacionSinCambiosException();
+        }
         this.scheduledDate = fecha;
         this.timeSlot = franja;
         this.updatedAt = ahora;
 
-        if (responsable != null && !responsable.isBlank() && !responsable.equals(this.assignedUsername)) {
+        if (cambiaResponsable) {
             this.assignedUsername = responsable;
             this.status = PickupStatus.SCHEDULED;
             return PickupEventType.ASSIGNED;
         }
 
-        return PickupEventType.SCHEDULED;
+        return PickupEventType.RESCHEDULED;
     }
 
     /** Cancela la recogida. Solo se puede mientras nadie haya salido a recoger. */
@@ -195,6 +214,14 @@ public class Pickup {
      */
     public boolean puedeVerDatosPrivados(String solicitante) {
         return solicitante != null && solicitante.equals(assignedUsername);
+    }
+
+    public boolean admiteAutogestion() {
+        return managementCodeHash != null && !managementCodeHash.isBlank();
+    }
+
+    public String getManagementCodeHash() {
+        return managementCodeHash;
     }
 
     public Long getId() {

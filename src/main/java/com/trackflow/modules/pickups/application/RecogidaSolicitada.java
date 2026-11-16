@@ -13,5 +13,6 @@ public record RecogidaSolicitada(
         String eventId,
         String pickupNumber,
         String status,
-        Instant requestedAt) {
+        Instant requestedAt,
+        String managementCode) {
 }

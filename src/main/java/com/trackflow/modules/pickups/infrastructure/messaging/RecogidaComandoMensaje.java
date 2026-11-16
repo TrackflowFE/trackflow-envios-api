@@ -32,7 +32,8 @@ public record RecogidaComandoMensaje(
         BigDecimal weightKg,
         String shipmentTrackingNumber,
         String assignedUsername,
-        String reason) {
+        String reason,
+        String managementCodeHash) {
 
     /**
      * Versión del formato con que se produjo el mensaje. Viaja en cada mensaje para
@@ -62,7 +63,8 @@ public record RecogidaComandoMensaje(
                 comando.weightKg(),
                 comando.shipmentTrackingNumber(),
                 comando.assignedUsername(),
-                comando.reason());
+                comando.reason(),
+                comando.managementCodeHash());
     }
 
     public RecogidaComando toComando() {
@@ -82,6 +84,7 @@ public record RecogidaComandoMensaje(
                 weightKg,
                 shipmentTrackingNumber,
                 assignedUsername,
-                reason);
+                reason,
+                managementCodeHash);
     }
 }

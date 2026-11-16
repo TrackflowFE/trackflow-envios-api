@@ -67,6 +67,10 @@ public class SecurityConfig {
                     // de ninguna recogida: se puede ver sin token. Es la única ruta de
                     // recogidas que queda abierta; las demás se cierran más abajo.
                     auth.requestMatchers(HttpMethod.GET, "/api/pickups/operating-hours").permitAll();
+                    auth.requestMatchers(HttpMethod.POST, "/api/pickups/self-service",
+                            "/api/pickups/self-service/*/cancel").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/pickups/self-service/*").permitAll();
+                    auth.requestMatchers(HttpMethod.PUT, "/api/pickups/self-service/*/schedule").permitAll();
                     // /error es a donde Spring reenvía las respuestas de error: si se
                     // cerrara, un 404 llegaría al cliente como 401.
                     auth.requestMatchers("/", "/error", "/actuator/health/**", "/swagger-ui.html",

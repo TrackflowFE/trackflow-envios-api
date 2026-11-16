@@ -31,8 +31,9 @@ class EnviosRegistradosJdbc implements EnviosRegistrados {
         }
 
         List<EnvioRegistrado> encontrados = jdbc.query(
-                "select tracking_number, sender_city_id from shipments where tracking_number = ?",
-                (rs, fila) -> new EnvioRegistrado(rs.getString("tracking_number"), rs.getLong("sender_city_id")),
+                "select tracking_number, sender_city_id, status from shipments where tracking_number = ?",
+                (rs, fila) -> new EnvioRegistrado(rs.getString("tracking_number"), rs.getLong("sender_city_id"),
+                        rs.getString("status")),
                 trackingNumber);
 
         return encontrados.stream().findFirst();

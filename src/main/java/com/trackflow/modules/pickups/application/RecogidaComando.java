@@ -28,7 +28,16 @@ public record RecogidaComando(
         BigDecimal weightKg,
         String shipmentTrackingNumber,
         String assignedUsername,
-        String reason) {
+        String reason,
+        String managementCodeHash) {
+
+    public RecogidaComando(String eventId, Tipo comando, String pickupNumber, String actor, Instant occurredAt,
+            String address, Long cityId, String contactName, String contactPhone, LocalDate scheduledDate,
+            String timeSlot, PackageSize packageSize, BigDecimal weightKg, String shipmentTrackingNumber,
+            String assignedUsername, String reason) {
+        this(eventId, comando, pickupNumber, actor, occurredAt, address, cityId, contactName, contactPhone,
+                scheduledDate, timeSlot, packageSize, weightKg, shipmentTrackingNumber, assignedUsername, reason, null);
+    }
 
     /** Las operaciones que se pueden pedir sobre una recogida. */
     public enum Tipo {

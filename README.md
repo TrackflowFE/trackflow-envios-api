@@ -23,7 +23,11 @@ Las APIs no se llaman entre sí: se comunican por eventos en RabbitMQ y comparte
 | --- | --- | --- |
 | `POST /api/shipments` | Operador | Solicita el registro de un envío. Responde 202 con el número de seguimiento; el registro se completa de forma asíncrona. |
 | `GET /api/pickups/operating-hours` | Público | Días, franjas, anticipación mínima y horizonte de las recogidas a domicilio. |
-| `POST /api/pickups` | Operador | Solicita una recogida a domicilio. Responde 202 con el número `RC…`; el registro se completa de forma asíncrona. |
+| `POST /api/pickups` | Operador | Solicita una recogida. Responde 202 con número `RC…` y `managementCode`, mostrado una sola vez. |
+| `POST /api/pickups/self-service` | Público | Solicita una recogida sin guía; devuelve número y código de gestión una sola vez. Un operador podrá vincular la guía. |
+| `GET /api/pickups/self-service/{pickupNumber}` | Código | Consulta la recogida y sus datos privados con `X-Codigo-Gestion`. |
+| `PUT /api/pickups/self-service/{pickupNumber}/schedule` | Código | Reprograma con `{scheduledDate,timeSlot}`, sin cambiar la asignación. |
+| `POST /api/pickups/self-service/{pickupNumber}/cancel` | Código | Cancela con `{reason}` opcional. |
 | `GET /api/pickups` | Operador | Lista las recogidas; filtros opcionales `status` y `assignedTo=me`. |
 | `GET /api/pickups/{pickupNumber}` | Operador | Una recogida con su historial. La dirección y el contacto solo llegan si el usuario es el asignado. |
 | `GET /api/pickups/assignees` | Operador | Operadores activos a los que se puede asignar una recogida. |
@@ -70,7 +74,9 @@ Ejemplo de solicitud de recogida:
 }
 ~~~
 
-La guía es opcional: se puede pedir la recogida antes de registrar el envío y vincularla después. Estados de una recogida: `REQUESTED`, `SCHEDULED`, `ON_THE_WAY`, `PICKED_UP` y `CANCELLED`. La dirección y el teléfono de contacto solo se devuelven al operador con la recogida asignada (`assigned_username`); para cualquier otro llegan vacíos con `accessRestricted: true`. Un administrador tampoco está exento: si necesita ver la dirección, se asigna la recogida.
+La guía es opcional: se puede pedir la recogida antes de registrar el envío y vincularla después. El autoservicio no acepta guía al crear, pues no comprueba su titularidad; la vinculación la realiza un operador. Solo se admiten guías en `REGISTERED` y no vinculadas a otra recogida no cancelada. Si se completa sin guía, la custodia comienza al vincularla. Estados de una recogida: `REQUESTED`, `SCHEDULED`, `ON_THE_WAY`, `PICKED_UP` y `CANCELLED`. La dirección y el contacto solo se devuelven al operador asignado o al remitente con código válido; para otros llegan vacíos con `accessRestricted: true`. El historial registra `RESCHEDULED` con fecha y franja anteriores; el motivo libre de cancelación es privado. Número o código incorrectos responden el mismo 404. Recogidas anteriores a V24 no admiten autoservicio.
+
+El código tiene ocho caracteres generados con `SecureRandom`; solo su hash BCrypt se guarda o se envía en el comando. Hay que guardarlo en la primera respuesta: no existe recuperación. Si la respuesta se pierde, el resultado es incierto y un reintento puede crear otra recogida. Los cambios y la creación responden 202 al encolar, no al aplicarse.
 
 ## Mensajería (RabbitMQ)
 
@@ -84,19 +90,23 @@ La guía es opcional: se puede pedir la recogida antes de registrar el envío y 
 
 Los mensajes viajan como JSON. El evento `shipment.created` lleva: `trackingNumber`, `status`, `senderName`, `originCityId`, `originCity`, `recipientName`, `recipientAddress`, `destinationCityId`, `destinationCity`, `registeredAt` y `occurredAt`. Al publicar, si hay una transacción en curso se espera a que se confirme.
 
-El evento `pickup.completed` lleva solo `pickupNumber`, `trackingNumber`, `cityId`, `pickedUpAt` y `occurredAt`. La dirección del remitente nunca sale de esta API: la dirección y el contacto son datos privados de la recogida y se quedan en la tabla `pickups`.
+El evento `pickup.completed` lleva solo `pickupNumber`, `trackingNumber`, `cityId`, `pickedUpAt` y `occurredAt`. No contiene dirección ni contacto.
 
 La API guarda `pickup.completed` en `pickup_outbox` dentro de la transacción de la recogida y reintenta su publicación hasta recibir confirmación del broker. La entrega es al menos una vez: logística deduplica usando el número de recogida. Hay que desplegar primero la API 3 para que su cola esté enlazada al exchange.
 
 El comando de recogida viaja con `eventId`, `comando` (`CREAR`, `REPROGRAMAR`, `CANCELAR`, `DESPACHAR`, `COMPLETAR`, `VINCULAR`), `pickupNumber`, `actor` y `occurredAt`, más los datos que ese comando usa. El broker entrega al menos una vez: la reentrega se descarta por `eventId`.
 
+El comando `CREAR` y `pickups.requests.dlq` contienen dirección y teléfono en claro y el hash del código. Restringir mediante ACL en CloudAMQP el acceso a las colas y sus respaldos, limitar su retención y usar TLS; estas acciones requieren configuración operativa y no las aplica este repositorio. Supervisar las colas de descartados, también la de logística: un confirm del broker no acredita que logística aplicó la custodia. Las comprobaciones al admitir y consumir reducen carreras pero una guía puede avanzar después; un 202 puede terminar descartado y no existe reconciliación automática. El publicador de comandos tampoco espera confirmación del broker.
+
 ## Base de datos
 
-- Una sola base de Supabase (PostgreSQL 17) compartida por las tres APIs. Esta API es la dueña del esquema: las migraciones Flyway (V1 a V23) en `src/main/resources/db/migration` son la fuente de verdad y se aplican al arrancar. No se debe cargar `schema.sql` a mano, porque dejaría la base sin historial de Flyway.
+- Una sola base de Supabase (PostgreSQL 17) compartida por las tres APIs. Esta API es la dueña del esquema: las migraciones Flyway (V1 a V24) en `src/main/resources/db/migration` son la fuente de verdad y se aplican al arrancar. No se debe cargar `schema.sql` a mano, porque dejaría la base sin historial de Flyway.
 - Escribe: `shipments`, `pickups`, `pickup_events`, `pickup_outbox`, `cities`, `auth_users`, `auth_sessions` y `flyway_schema_history`.
 - Solo lee: `logistics_centers` y `logistics_route_legs`, para comprobar cobertura y ruta al registrar un envío.
 - Las ciudades, los centros y los tramos de ruta no se siembran por código: los cargan las migraciones.
 - Pool de conexiones: máximo 3, porque el plan gratuito de Supabase admite pocas conexiones para las tres APIs.
+
+Antes de V24, revisar y resolver manualmente cualquier duplicado activo sin borrar historia: `select shipment_tracking_number, count(*) from pickups where status <> 'CANCELLED' and shipment_tracking_number is not null group by shipment_tracking_number having count(*) > 1;`. El índice único fallará si quedan duplicados. Desplegar la migración antes de ejecutar el código nuevo.
 
 ## Variables de entorno
 
@@ -117,6 +127,11 @@ El comando de recogida viaja con `eventId`, `comando` (`CREAR`, `REPROGRAMAR`, `
 | `TRACKFLOW_PICKUPS_ANTICIPACION_HORAS` | Antelación mínima para programar una recogida. Por defecto 4 horas |
 | `TRACKFLOW_PICKUPS_HORIZONTE_DIAS` | Cuántos días por adelantado se puede agendar. Por defecto 30 |
 | `TRACKFLOW_PICKUPS_ZONA` | Zona horaria en que se cuentan los días y las franjas. Por defecto `America/Bogota` |
+| `TRACKFLOW_PICKUPS_LIMITE_IP` | Máximo de peticiones de autoservicio por IP y ventana (100). |
+| `TRACKFLOW_PICKUPS_LIMITE_RECOGIDA` | Máximo de intentos fallidos o en curso por recogida y ventana (10). |
+| `TRACKFLOW_PICKUPS_LIMITE_VENTANA_SEGUNDOS` | Ventana fija en segundos (900; máximo 86400). |
+
+Los límites están en memoria por instancia y se pierden al reiniciar; no son globales. Detrás de un proxy configurar de forma segura la IP real y filtrar cabeceras reenviadas no confiables. Complementar con limitación distribuida en el borde. Un atacante puede bloquear temporalmente una recogida conocida hasta que termine la ventana; con muchas IP puede repetir ese bloqueo.
 
 Los valores se definen en el panel de Render, nunca en el repositorio. Sin definirlas, la aplicación usa los valores por defecto de desarrollo local (PostgreSQL y RabbitMQ en `localhost`).
 
