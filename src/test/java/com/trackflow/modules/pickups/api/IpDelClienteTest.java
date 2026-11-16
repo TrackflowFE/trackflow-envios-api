@@ -44,4 +44,9 @@ class IpDelClienteTest {
             assertEquals("192.0.2.10", new IpDelCliente(0, "").obtener(envuelta));
         });
     }
+
+    @Test
+    void direccionRemotaNoLiteralNoRompeLaPeticion() {
+        assertEquals("desconocida", new IpDelCliente(0, "").obtener(request("fe80::1%eth0", null)));
+    }
 }

@@ -70,12 +70,13 @@ public class LimiteDeIntentosFilter extends OncePerRequestFilter {
             numero = numero.substring(0, parametros);
         }
         boolean numeroValido = NUMERO.matcher(numero).matches();
+        boolean cuentaRecogida = numeroValido && rutaDeCredencial(resto);
         String ip = ipDelCliente.obtener(request);
         String clavePorIp = ip + "|" + numero;
         Long reservaPorIp = null;
         Long reservaGlobal = null;
         boolean admitida = ips.reservar(ip, limiteIp) != null;
-        if (admitida && numeroValido) {
+        if (admitida && cuentaRecogida) {
             reservaPorIp = fallosPorIp.reservar(clavePorIp, limiteRecogidaPorIp);
             admitida = reservaPorIp != null;
             if (admitida) {
@@ -99,10 +100,31 @@ public class LimiteDeIntentosFilter extends OncePerRequestFilter {
         try {
             chain.doFilter(request, captura);
         } finally {
-            if (numeroValido && captura.getStatus() != 404) {
+            if (cuentaRecogida && captura.getStatus() != 404) {
                 fallosPorIp.liberar(clavePorIp, reservaPorIp);
                 fallos.liberar(numero, reservaGlobal);
             }
         }
+    }
+
+    /**
+     * Solo las rutas que autentican con el código de gestión cuentan contra la cuota de
+     * la recogida. Un 404 de una subruta inventada no es un intento de credencial y no
+     * debe servir para agotar la cuota del propietario.
+     */
+    private static boolean rutaDeCredencial(String resto) {
+        String[] partes = resto.split("/", -1);
+        if (partes.length > 2) {
+            return false;
+        }
+        if (partes.length == 1) {
+            return true;
+        }
+        String accion = partes[1];
+        int parametros = accion.indexOf(';');
+        if (parametros >= 0) {
+            accion = accion.substring(0, parametros);
+        }
+        return "schedule".equals(accion) || "cancel".equals(accion);
     }
 }

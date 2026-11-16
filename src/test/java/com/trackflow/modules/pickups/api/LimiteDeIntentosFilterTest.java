@@ -125,4 +125,14 @@ class LimiteDeIntentosFilterTest {
         assertEquals(200, solicitar(filtro, "192.0.2.1", "RC0123456789AB", 200).getStatus());
         assertEquals(429, solicitar(filtro, "192.0.2.1", "abc", 404).getStatus());
     }
+
+    @Test
+    void subrutasInexistentesNoAgotanLaCuotaDeLaRecogida() throws Exception {
+        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(10, 1, 1, 60,
+                Clock.systemUTC(), request -> null, new IpDelCliente(0, ""));
+        assertEquals(404, solicitar(filtro, "192.0.2.1", "RC0123456789AB/desconocida", 404).getStatus());
+        assertEquals(404, solicitar(filtro, "192.0.2.1", "RC0123456789AB/otra", 404).getStatus());
+        assertEquals(404, solicitar(filtro, "192.0.2.2", "RC0123456789AB", 404).getStatus());
+        assertEquals(429, solicitar(filtro, "192.0.2.3", "RC0123456789AB", 200).getStatus());
+    }
 }

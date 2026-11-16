@@ -37,7 +37,16 @@ final class IpDelCliente {
         while (original instanceof ServletRequestWrapper wrapper) {
             original = wrapper.getRequest();
         }
-        String remoto = literal(original.getRemoteAddr());
+        String remoto;
+        try {
+            remoto = literal(original.getRemoteAddr());
+        } catch (IllegalArgumentException e) {
+            // getRemoteAddr normalmente es una IP literal, pero un contenedor puede
+            // devolver una forma que no lo sea (por ejemplo, IPv6 con ámbito). No se
+            // puede identificar al cliente, así que todas esas peticiones comparten
+            // una única cuota en vez de romper la petición con un 500.
+            return "desconocida";
+        }
         if (saltos == 0 || !proxies.contains(remoto) || !(original instanceof HttpServletRequest http)) {
             return remoto;
         }
