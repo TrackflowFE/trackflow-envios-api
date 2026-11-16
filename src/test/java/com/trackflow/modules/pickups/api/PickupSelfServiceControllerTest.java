@@ -9,13 +9,21 @@ import com.trackflow.bootstrap.ValidationExceptionHandler;
 import com.trackflow.modules.pickups.application.AdmitirRecogida;
 import com.trackflow.modules.pickups.application.ConsultarRecogidas;
 import com.trackflow.modules.pickups.application.RecogidaSolicitada;
+import com.trackflow.modules.pickups.application.VistaDeRecogida;
 import com.trackflow.modules.pickups.domain.CodigoDeGestionInvalidoException;
 import com.trackflow.modules.pickups.domain.ReprogramacionSinCambiosException;
 import com.trackflow.modules.pickups.domain.TransicionDeRecogidaInvalidaException;
 import com.trackflow.modules.pickups.domain.PickupStatus;
 import com.trackflow.modules.pickups.domain.DiaNoOperativoException;
+import com.trackflow.modules.pickups.domain.PackageSize;
+import com.trackflow.modules.pickups.domain.Pickup;
+import com.trackflow.modules.pickups.domain.PickupEvent;
+import com.trackflow.modules.pickups.domain.PickupEventType;
+import com.trackflow.modules.pickups.domain.PickupNumber;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -53,6 +61,34 @@ class PickupSelfServiceControllerTest {
                 .andExpect(status().isNotFound()).andReturn().getResponse().getContentAsString();
         org.junit.jupiter.api.Assertions.assertEquals(a.replace("RC0123456789AB", "NUMERO"),
                 b.replace("RC0123456789AC", "NUMERO"));
+    }
+
+    @Test
+    void consultaPublicaNoExponeIdentidadesNiDetallesDeOperador() throws Exception {
+        Instant now = Instant.parse("2026-11-16T12:00:00Z");
+        String numero = "RC0123456789AB";
+        Pickup pickup = Pickup.registrar(PickupNumber.of(numero), "Calle 1", 1L, "Ana Torres", "3001234567",
+                LocalDate.of(2026, 11, 17), "08:00-10:00", PackageSize.MEDIUM, BigDecimal.ONE,
+                null, "usuario.secreto", "creador.secreto", now);
+        PickupEvent event = new PickupEvent("e1", numero, PickupEventType.CANCELLED, PickupStatus.REQUESTED,
+                PickupStatus.CANCELLED, "Nombre Operador Confidencial", "usuario.secreto", now);
+        when(consultar.delRemitente(numero, "ABCDEFGH"))
+                .thenReturn(new VistaDeRecogida(pickup, "Medellin", List.of(event), true));
+
+        String body = mvc.perform(get("/api/pickups/self-service/{numero}", numero)
+                        .header("X-Codigo-Gestion", "ABCDEFGH"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.address").value("Calle 1"))
+                .andExpect(jsonPath("$.history[0].type").value("CANCELLED"))
+                .andExpect(jsonPath("$.history[0].actor").value("operación"))
+                .andExpect(jsonPath("$.history[0].detail").doesNotExist())
+                .andExpect(jsonPath("$.assignedUsername").doesNotExist())
+                .andExpect(jsonPath("$.assigned").value(true))
+                .andExpect(jsonPath("$.requestedBy").value("operación"))
+                .andReturn().getResponse().getContentAsString();
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("usuario.secreto"));
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("creador.secreto"));
+        org.junit.jupiter.api.Assertions.assertFalse(body.contains("Nombre Operador Confidencial"));
     }
 
     @Test

@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * La recogida tal como la ve quien consulta.
@@ -27,6 +28,7 @@ public record RecogidaResponse(
         BigDecimal weightKg,
         String shipmentTrackingNumber,
         String assignedUsername,
+        boolean assigned,
         String requestedBy,
         Instant requestedAt,
         Instant updatedAt,
@@ -35,6 +37,9 @@ public record RecogidaResponse(
         String contactPhone,
         boolean accessRestricted,
         List<EventoResponse> history) {
+
+    private static final Pattern DETALLE_HORARIO = Pattern.compile(
+            "De \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}-\\d{2}:\\d{2} a \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}-\\d{2}:\\d{2}");
 
     /** Un cambio de la bitácora de la recogida. */
     public record EventoResponse(
@@ -71,6 +76,7 @@ public record RecogidaResponse(
                 pickup.getWeightKg(),
                 pickup.getShipmentTrackingNumber(),
                 pickup.getAssignedUsername(),
+                pickup.getAssignedUsername() != null,
                 pickup.getRequestedBy(),
                 pickup.getRequestedAt(),
                 pickup.getUpdatedAt(),
@@ -79,5 +85,26 @@ public record RecogidaResponse(
                 visible ? pickup.getContactPhone() : null,
                 !visible,
                 vista.historial().stream().map(evento -> EventoResponse.from(evento, visible)).toList());
+    }
+
+    public static RecogidaResponse paraRemitente(VistaDeRecogida vista) {
+        RecogidaResponse response = from(vista);
+        return new RecogidaResponse(
+                response.pickupNumber(), response.status(), response.cityId(), response.cityName(),
+                response.scheduledDate(), response.timeSlot(), response.packageSize(), response.weightKg(),
+                response.shipmentTrackingNumber(), null, response.assigned(),
+                "remitente".equals(response.requestedBy()) ? "remitente" : "operación",
+                response.requestedAt(), response.updatedAt(),
+                response.address(), response.contactName(), response.contactPhone(), response.accessRestricted(),
+                vista.historial().stream().map(evento -> new EventoResponse(
+                        evento.getType().name(),
+                        evento.getPreviousStatus() == null ? null : evento.getPreviousStatus().name(),
+                        evento.getNewStatus() == null ? null : evento.getNewStatus().name(),
+                        evento.getType() == PickupEventType.ASSIGNED ? "Asignada a un operador"
+                                : evento.getType() == PickupEventType.REJECTED ? "La solicitud no pudo aplicarse"
+                                : evento.getType() == PickupEventType.RESCHEDULED && evento.getDetail() != null
+                                        && DETALLE_HORARIO.matcher(evento.getDetail()).matches() ? evento.getDetail() : null,
+                        "remitente".equals(evento.getActorUsername()) ? "remitente" : "operación",
+                        evento.getOccurredAt())).toList());
     }
 }

@@ -51,7 +51,7 @@ public class PickupSelfServiceController {
     @GetMapping("/{pickupNumber}")
     public RecogidaResponse una(@PathVariable String pickupNumber,
             @RequestHeader(value = "X-Codigo-Gestion", required = false) String codigo) {
-        return RecogidaResponse.from(consultar.delRemitente(pickupNumber, codigo));
+        return RecogidaResponse.paraRemitente(consultar.delRemitente(pickupNumber, codigo));
     }
 
     @PutMapping("/{pickupNumber}/schedule")
