@@ -99,6 +99,10 @@ public class SecurityConfig {
                         // aquí, explícitos, para no abrir cualquier PUT futuro.
                         auth.requestMatchers(HttpMethod.PUT, "/api/pickups/*/schedule", "/api/pickups/*/shipment")
                                 .hasRole(SecurityProperties.ROL_OPERADOR);
+                        // El comprobante lleva nombres de personas (HU-14): no se abre al
+                        // público como /api/tracking, aunque sea una consulta.
+                        auth.requestMatchers(HttpMethod.GET, "/api/shipments/*/receipt")
+                                .hasRole(SecurityProperties.ROL_OPERADOR);
                         // Lo que no esté listado arriba queda cerrado: un endpoint nuevo no
                         // puede quedar público por olvido.
                         auth.anyRequest().denyAll();

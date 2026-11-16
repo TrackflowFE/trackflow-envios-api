@@ -138,4 +138,18 @@ class AdmitirEnvioTest {
 
         assertNotEquals(primera.eventId(), segunda.eventId());
     }
+
+    @Test
+    void laFechaSeRecortaAMicrosegundosComoLaGuardaPostgres() {
+        conCoberturaYRuta();
+        Instant conNanosegundos = Instant.parse("2026-10-15T18:00:00.123456789Z");
+        AdmitirEnvio conNanos = new AdmitirEnvio(trackingNumbers, publisher, ciudades, cobertura,
+                Clock.fixed(conNanosegundos, ZoneOffset.UTC));
+
+        EnvioSolicitado solicitud = conNanos.ejecutar(
+                new AdmitirEnvio.Command(remitente, destinatario, "Documentos"));
+
+        assertEquals(Instant.parse("2026-10-15T18:00:00.123456Z"), solicitud.solicitadoEn());
+        assertEquals(0, solicitud.solicitadoEn().getNano() % 1000);
+    }
 }

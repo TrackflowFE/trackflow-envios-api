@@ -1,5 +1,6 @@
 package com.trackflow.modules.shipments.api.dto;
 
+import com.trackflow.modules.shipments.application.Comprobante;
 import com.trackflow.modules.shipments.application.EnvioSolicitado;
 import java.time.Instant;
 
@@ -9,7 +10,8 @@ public record EnvioAdmitidoResponse(
         String recipient,
         String destinationCity,
         Instant requestedAt,
-        String processingStatus) {
+        String processingStatus,
+        ComprobanteResponse receipt) {
 
     public static EnvioAdmitidoResponse from(EnvioSolicitado solicitud) {
         return new EnvioAdmitidoResponse(
@@ -18,6 +20,7 @@ public record EnvioAdmitidoResponse(
                 solicitud.destinatario().getFullName(),
                 solicitud.ciudadDestino().etiqueta(),
                 solicitud.solicitadoEn(),
-                "QUEUED");
+                "QUEUED",
+                ComprobanteResponse.from(Comprobante.de(solicitud)));
     }
 }

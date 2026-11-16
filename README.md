@@ -3,7 +3,7 @@
 API 1 de las tres Web APIs de TrackFlow (Fábrica Escuela, UdeA 2026-2). Registra los envíos, emite los tokens de sesión y es dueña del catálogo de ciudades y del esquema de la base de datos compartida.
 
 - Responsable: Oliver Quiroz.
-- Historias de usuario: HU-01 (registrar un envío), HU-08 (ingreso y sesión) y HU-20 (solicitar la recogida del envío a domicilio).
+- Historias de usuario: HU-01 (registrar un envío), HU-08 (ingreso y sesión), HU-14 (imprimir o copiar el comprobante con el número de seguimiento) y HU-20 (solicitar la recogida del envío a domicilio).
 - Despliegue: https://trackflow-envios-api.onrender.com (Render, plan gratuito: la primera consulta tarda cerca de un minuto porque el servicio duerme).
 - Documentación interactiva: https://trackflow-envios-api.onrender.com/swagger-ui/index.html
 
@@ -21,7 +21,8 @@ Las APIs no se llaman entre sí: se comunican por eventos en RabbitMQ y comparte
 
 | Método y ruta | Acceso | Descripción |
 | --- | --- | --- |
-| `POST /api/shipments` | Operador | Solicita el registro de un envío. Responde 202 con el número de seguimiento; el registro se completa de forma asíncrona. |
+| `POST /api/shipments` | Operador | Solicita el registro de un envío. Responde 202 con el número de seguimiento y el comprobante (`receipt`); el registro se completa de forma asíncrona. |
+| `GET /api/shipments/{trackingNumber}/receipt` | Operador | Comprobante del envío (HU-14): número, fecha, remitente, origen, destinatario y destino. Sin teléfonos ni direcciones. |
 | `GET /api/pickups/operating-hours` | Público | Días, franjas, anticipación mínima y horizonte de las recogidas a domicilio. |
 | `POST /api/pickups` | Operador | Solicita una recogida. Responde 202 con número `RC…` y `managementCode`, mostrado una sola vez. |
 | `POST /api/pickups/self-service` | Público | Solicita una recogida sin guía; devuelve número y código de gestión una sola vez. Un operador podrá vincular la guía. |
@@ -56,7 +57,9 @@ Ejemplo de solicitud de registro:
 }
 ~~~
 
-Los identificadores de ciudad salen de `GET /api/cities`. Tipos de documento: CC, CE, TI, PP y NIT. La respuesta trae `trackingNumber` y `processingStatus: QUEUED`. Antes de aceptar un envío se valida que las dos ciudades tengan cobertura (un centro activo) y que exista una ruta entre ellas.
+Los identificadores de ciudad salen de `GET /api/cities`. Tipos de documento: CC, CE, TI, PP y NIT. La respuesta trae `trackingNumber`, `processingStatus: QUEUED` y `receipt`, el comprobante que se imprime al registrar. Antes de aceptar un envío se valida que las dos ciudades tengan cobertura (un centro activo) y que exista una ruta entre ellas.
+
+El comprobante (`receipt`) tiene seis campos: `trackingNumber`, `registeredAt`, `senderName`, `originCity`, `recipientName` y `destinationCity`. `GET /api/shipments/{trackingNumber}/receipt` devuelve exactamente los mismos datos para reimprimirlo, con `Cache-Control: no-store`; un número inexistente responde 404 y uno con formato inválido, 400. La fecha se recorta a microsegundos al admitir el envío, que es la precisión con que la guarda Postgres, para que la reimpresión no caiga en otro minuto.
 
 Ejemplo de solicitud de recogida:
 
