@@ -87,9 +87,10 @@ class ShipmentTest {
     void losEstadosSiguenElOrdenDelRecorrido() {
         ShipmentStatus[] estados = ShipmentStatus.values();
 
-        assertEquals(6, estados.length);
+        assertEquals(7, estados.length);
         assertEquals(ShipmentStatus.REGISTERED, estados[0]);
-        assertEquals(ShipmentStatus.DELIVERED, estados[5]);
+        assertEquals(ShipmentStatus.IN_CUSTODY, estados[1]);
+        assertEquals(ShipmentStatus.DELIVERED, estados[6]);
     }
 
     @Test

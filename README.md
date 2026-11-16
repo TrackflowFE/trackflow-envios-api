@@ -3,7 +3,7 @@
 API 1 de las tres Web APIs de TrackFlow (Fábrica Escuela, UdeA 2026-2). Registra los envíos, emite los tokens de sesión y es dueña del catálogo de ciudades y del esquema de la base de datos compartida.
 
 - Responsable: Oliver Quiroz.
-- Historias de usuario: HU-01 (registrar un envío) y HU-08 (ingreso y sesión).
+- Historias de usuario: HU-01 (registrar un envío), HU-08 (ingreso y sesión) y HU-20 (solicitar la recogida del envío a domicilio).
 - Despliegue: https://trackflow-envios-api.onrender.com (Render, plan gratuito: la primera consulta tarda cerca de un minuto porque el servicio duerme).
 - Documentación interactiva: https://trackflow-envios-api.onrender.com/swagger-ui/index.html
 
@@ -22,6 +22,16 @@ Las APIs no se llaman entre sí: se comunican por eventos en RabbitMQ y comparte
 | Método y ruta | Acceso | Descripción |
 | --- | --- | --- |
 | `POST /api/shipments` | Operador | Solicita el registro de un envío. Responde 202 con el número de seguimiento; el registro se completa de forma asíncrona. |
+| `GET /api/pickups/operating-hours` | Público | Días, franjas, anticipación mínima y horizonte de las recogidas a domicilio. |
+| `POST /api/pickups` | Operador | Solicita una recogida a domicilio. Responde 202 con el número `RC…`; el registro se completa de forma asíncrona. |
+| `GET /api/pickups` | Operador | Lista las recogidas; filtros opcionales `status` y `assignedTo=me`. |
+| `GET /api/pickups/{pickupNumber}` | Operador | Una recogida con su historial. La dirección y el contacto solo llegan si el usuario es el asignado. |
+| `GET /api/pickups/assignees` | Operador | Operadores activos a los que se puede asignar una recogida. |
+| `PUT /api/pickups/{pickupNumber}/schedule` | Operador | Reprograma fecha y franja; si trae `assignedUsername`, la asigna. |
+| `POST /api/pickups/{pickupNumber}/cancel` | Operador | Cancela una recogida que todavía no salió. Cuerpo opcional `{reason}`. |
+| `POST /api/pickups/{pickupNumber}/dispatch` | Operador | Marca que el operador va en camino. |
+| `POST /api/pickups/{pickupNumber}/complete` | Operador | Marca la recogida como realizada. |
+| `PUT /api/pickups/{pickupNumber}/shipment` | Operador | Vincula un envío (`{trackingNumber}`); al completarse la recogida el envío entra en custodia. |
 | `GET /api/cities` | Público | Busca ciudades. Parámetros `q` y `onlyCovered=true` (solo las que tienen cobertura). |
 | `GET /api/cities/{id}` | Público | Una ciudad por su identificador. |
 | `POST /api/auth/login` | Público | Ingreso con `username` y `password`. Devuelve el token. |
@@ -44,6 +54,24 @@ Ejemplo de solicitud de registro:
 
 Los identificadores de ciudad salen de `GET /api/cities`. Tipos de documento: CC, CE, TI, PP y NIT. La respuesta trae `trackingNumber` y `processingStatus: QUEUED`. Antes de aceptar un envío se valida que las dos ciudades tengan cobertura (un centro activo) y que exista una ruta entre ellas.
 
+Ejemplo de solicitud de recogida:
+
+~~~json
+{
+  "address": "Calle 45 # 12-30, apto 201",
+  "cityId": 1,
+  "contactName": "Ana Torres",
+  "contactPhone": "3001234567",
+  "scheduledDate": "2026-11-20",
+  "timeSlot": "08:00-10:00",
+  "packageSize": "MEDIUM",
+  "weightKg": 5.5,
+  "shipmentTrackingNumber": "TF0123456789AB"
+}
+~~~
+
+La guía es opcional: se puede pedir la recogida antes de registrar el envío y vincularla después. Estados de una recogida: `REQUESTED`, `SCHEDULED`, `ON_THE_WAY`, `PICKED_UP` y `CANCELLED`. La dirección y el teléfono de contacto solo se devuelven al operador con la recogida asignada (`assigned_username`); para cualquier otro llegan vacíos con `accessRestricted: true`. Un administrador tampoco está exento: si necesita ver la dirección, se asigna la recogida.
+
 ## Mensajería (RabbitMQ)
 
 | Qué | Intercambio | Clave | Cola |
@@ -51,13 +79,21 @@ Los identificadores de ciudad salen de `GET /api/cities`. Tipos de documento: CC
 | Recibe las solicitudes de registro (privado de esta API) | `shipments.topic` | `shipment.requested` | `shipments.requests.queue` (descartados: `shipments.requests.dlq`) |
 | Publica "envío creado" | `trackflow.events` | `shipment.created` | La consumen la API 2 y la API 3 con colas propias |
 | Consume "evento logístico registrado" | `trackflow.events` | `logistics.event.registered` | `shipments.logistics-events.queue` (descartados: `shipments.logistics-events.dlq`) |
+| Recibe los comandos de recogida (privado de esta API) | `pickups.topic` | `pickup.command` | `pickups.requests.queue` (descartados: `pickups.requests.dlq`) |
+| Publica "recogida completada" | `trackflow.events` | `pickup.completed` | La consume la API 3 con cola propia |
 
 Los mensajes viajan como JSON. El evento `shipment.created` lleva: `trackingNumber`, `status`, `senderName`, `originCityId`, `originCity`, `recipientName`, `recipientAddress`, `destinationCityId`, `destinationCity`, `registeredAt` y `occurredAt`. Al publicar, si hay una transacción en curso se espera a que se confirme.
 
+El evento `pickup.completed` lleva solo `pickupNumber`, `trackingNumber`, `cityId`, `pickedUpAt` y `occurredAt`. La dirección del remitente nunca sale de esta API: la dirección y el contacto son datos privados de la recogida y se quedan en la tabla `pickups`.
+
+La API guarda `pickup.completed` en `pickup_outbox` dentro de la transacción de la recogida y reintenta su publicación hasta recibir confirmación del broker. La entrega es al menos una vez: logística deduplica usando el número de recogida. Hay que desplegar primero la API 3 para que su cola esté enlazada al exchange.
+
+El comando de recogida viaja con `eventId`, `comando` (`CREAR`, `REPROGRAMAR`, `CANCELAR`, `DESPACHAR`, `COMPLETAR`, `VINCULAR`), `pickupNumber`, `actor` y `occurredAt`, más los datos que ese comando usa. El broker entrega al menos una vez: la reentrega se descarta por `eventId`.
+
 ## Base de datos
 
-- Una sola base de Supabase (PostgreSQL 17) compartida por las tres APIs. Esta API es la dueña del esquema: las migraciones Flyway (V1 a V22) en `src/main/resources/db/migration` son la fuente de verdad y se aplican al arrancar. No se debe cargar `schema.sql` a mano, porque dejaría la base sin historial de Flyway.
-- Escribe: `shipments`, `cities`, `auth_users`, `auth_sessions` y `flyway_schema_history`.
+- Una sola base de Supabase (PostgreSQL 17) compartida por las tres APIs. Esta API es la dueña del esquema: las migraciones Flyway (V1 a V23) en `src/main/resources/db/migration` son la fuente de verdad y se aplican al arrancar. No se debe cargar `schema.sql` a mano, porque dejaría la base sin historial de Flyway.
+- Escribe: `shipments`, `pickups`, `pickup_events`, `pickup_outbox`, `cities`, `auth_users`, `auth_sessions` y `flyway_schema_history`.
 - Solo lee: `logistics_centers` y `logistics_route_legs`, para comprobar cobertura y ruta al registrar un envío.
 - Las ciudades, los centros y los tramos de ruta no se siembran por código: los cargan las migraciones.
 - Pool de conexiones: máximo 3, porque el plan gratuito de Supabase admite pocas conexiones para las tres APIs.
@@ -76,6 +112,11 @@ Los mensajes viajan como JSON. El evento `shipment.created` lleva: `trackingNumb
 | `TRACKFLOW_OPERADOR_CLAVE` | Clave del usuario `operador`. Sin ella la escritura queda abierta |
 | `TRACKFLOW_ADMIN_CLAVE` | Clave del usuario `admin`. Sin ella `/api/admin/**` queda inaccesible |
 | `TRACKFLOW_CORS_ORIGINS` | Orígenes del frontend, separados por comas. `http://localhost:5173` siempre se admite |
+| `TRACKFLOW_PICKUPS_DIAS` | Días de atención de las recogidas, en número ISO (1 lunes ... 7 domingo). Por defecto `1,2,3,4,5,6` |
+| `TRACKFLOW_PICKUPS_FRANJAS` | Franjas de recogida, separadas por comas y con formato `HH:MM-HH:MM`. Por defecto de 08:00 a 18:00 en bloques de dos horas |
+| `TRACKFLOW_PICKUPS_ANTICIPACION_HORAS` | Antelación mínima para programar una recogida. Por defecto 4 horas |
+| `TRACKFLOW_PICKUPS_HORIZONTE_DIAS` | Cuántos días por adelantado se puede agendar. Por defecto 30 |
+| `TRACKFLOW_PICKUPS_ZONA` | Zona horaria en que se cuentan los días y las franjas. Por defecto `America/Bogota` |
 
 Los valores se definen en el panel de Render, nunca en el repositorio. Sin definirlas, la aplicación usa los valores por defecto de desarrollo local (PostgreSQL y RabbitMQ en `localhost`).
 
@@ -100,3 +141,5 @@ El archivo `render.yaml` define el servicio: Docker, plan gratuito, región Ohio
 
 - Los tokens que se emiten aquí los validan las APIs 2 y 3 con el mismo secreto, y comprueban la sesión en la tabla `auth_sessions`.
 - `POST /api/admin/rebuild-projections` solo vuelve a publicar los envíos. La republicación de eventos logísticos la expone la API 3.
+- Los envíos recogidos a domicilio (HU-20) pasan al estado `IN_CUSTODY`, entre `REGISTERED` y `AT_DISTRIBUTION_CENTER`: el paquete ya está en la empresa, pero todavía no ha entrado a un centro. Ese estado lo aplica el evento `logistics.event.registered` que publica la API 3 al registrar la recogida.
+- La admisión y la aplicación de los comandos de recogida son dos pasos: quien pide una recogida recibe el número `RC…` al momento, pero el registro en la base ocurre cuando el consumidor de la cola procesa el comando. Si se consulta en medio, puede salir un 404 o el estado anterior.

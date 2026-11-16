@@ -63,6 +63,10 @@ public class SecurityConfig {
                     // El catálogo de ciudades son las capitales del país: no es información
                     // de la operación, y el formulario de registro lo usa para sugerir.
                     auth.requestMatchers(HttpMethod.GET, "/api/cities", "/api/cities/*").permitAll();
+                    // El horario de las recogidas es el horario del servicio, no información
+                    // de ninguna recogida: se puede ver sin token. Es la única ruta de
+                    // recogidas que queda abierta; las demás se cierran más abajo.
+                    auth.requestMatchers(HttpMethod.GET, "/api/pickups/operating-hours").permitAll();
                     // /error es a donde Spring reenvía las respuestas de error: si se
                     // cerrara, un 404 llegaría al cliente como 401.
                     auth.requestMatchers("/", "/error", "/actuator/health/**", "/swagger-ui.html",
@@ -82,6 +86,15 @@ public class SecurityConfig {
                         // operación, no del cliente: los consulta quien registra movimientos.
                         auth.requestMatchers(HttpMethod.GET, "/api/shipments/*/actions", "/api/centers",
                                 "/api/centers/**").hasRole(SecurityProperties.ROL_OPERADOR);
+                        // Las recogidas son de la operación: quién las pidió, dónde y en qué
+                        // estado están es de los operadores. La dirección y el contacto solo
+                        // los ve el operador asignado, y eso lo resuelve la aplicación.
+                        auth.requestMatchers(HttpMethod.GET, "/api/pickups", "/api/pickups/*")
+                                .hasRole(SecurityProperties.ROL_OPERADOR);
+                        // Reprogramar y vincular un envío son cambios de la operación. Van
+                        // aquí, explícitos, para no abrir cualquier PUT futuro.
+                        auth.requestMatchers(HttpMethod.PUT, "/api/pickups/*/schedule", "/api/pickups/*/shipment")
+                                .hasRole(SecurityProperties.ROL_OPERADOR);
                         // Lo que no esté listado arriba queda cerrado: un endpoint nuevo no
                         // puede quedar público por olvido.
                         auth.anyRequest().denyAll();
