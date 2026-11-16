@@ -7,8 +7,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import java.io.IOException;
 import java.time.Clock;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -23,28 +22,34 @@ import org.springframework.web.cors.DefaultCorsProcessor;
 public class LimiteDeIntentosFilter extends OncePerRequestFilter {
     private static final String BASE = "/api/pickups/self-service";
     private static final int MAX_KEYS = 10000;
-    private final Map<String, Ventana> ips = new HashMap<>();
-    private final Map<String, Ventana> fallos = new HashMap<>();
+    private static final Pattern NUMERO = Pattern.compile("RC[0-9A-Z]{12}");
+    private final VentanasDeIntentos ips;
+    private final VentanasDeIntentos fallos;
+    private final VentanasDeIntentos fallosPorIp;
     private final int limiteIp;
     private final int limiteRecogida;
+    private final int limiteRecogidaPorIp;
     private final long ventanaMillis;
-    private final Clock clock;
     private final CorsConfigurationSource cors;
-
-    private record Ventana(long hasta, int cantidad) { }
+    private final IpDelCliente ipDelCliente;
 
     public LimiteDeIntentosFilter(@Value("${trackflow.pickups.limite.ip:100}") int limiteIp,
-            @Value("${trackflow.pickups.limite.recogida:10}") int limiteRecogida,
+            @Value("${trackflow.pickups.limite.recogida:30}") int limiteRecogida,
+            @Value("${trackflow.pickups.limite.recogida-por-ip:5}") int limiteRecogidaPorIp,
             @Value("${trackflow.pickups.limite.ventana-segundos:900}") long segundos, Clock clock,
-            CorsConfigurationSource cors) {
-        if (limiteIp < 1 || limiteRecogida < 1 || segundos < 1 || segundos > 86400) {
+            CorsConfigurationSource cors, IpDelCliente ipDelCliente) {
+        if (limiteIp < 1 || limiteRecogida < 1 || limiteRecogidaPorIp < 1 || segundos < 1 || segundos > 86400) {
             throw new IllegalArgumentException("Los límites de autoservicio deben ser positivos y la ventana de hasta 86400 segundos");
         }
         this.limiteIp = limiteIp;
         this.limiteRecogida = limiteRecogida;
+        this.limiteRecogidaPorIp = limiteRecogidaPorIp;
         this.ventanaMillis = segundos * 1000;
-        this.clock = clock;
+        this.ips = new VentanasDeIntentos(MAX_KEYS, ventanaMillis, clock);
+        this.fallos = new VentanasDeIntentos(MAX_KEYS, ventanaMillis, clock);
+        this.fallosPorIp = new VentanasDeIntentos(MAX_KEYS, ventanaMillis, clock);
         this.cors = cors;
+        this.ipDelCliente = ipDelCliente;
     }
 
     @Override
@@ -64,12 +69,22 @@ public class LimiteDeIntentosFilter extends OncePerRequestFilter {
         if (parametros >= 0) {
             numero = numero.substring(0, parametros);
         }
-        Long reserva = null;
-        boolean ipAdmitida = registrar(ips, request.getRemoteAddr(), limiteIp) != null;
-        if (ipAdmitida && !numero.isEmpty()) {
-            reserva = registrar(fallos, numero, limiteRecogida);
+        boolean numeroValido = NUMERO.matcher(numero).matches();
+        String ip = ipDelCliente.obtener(request);
+        String clavePorIp = ip + "|" + numero;
+        Long reservaPorIp = null;
+        Long reservaGlobal = null;
+        boolean admitida = ips.reservar(ip, limiteIp) != null;
+        if (admitida && numeroValido) {
+            reservaPorIp = fallosPorIp.reservar(clavePorIp, limiteRecogidaPorIp);
+            admitida = reservaPorIp != null;
+            if (admitida) {
+                reservaGlobal = fallos.reservar(numero, limiteRecogida);
+                admitida = reservaGlobal != null;
+            }
         }
-        if (!ipAdmitida || (!numero.isEmpty() && reserva == null)) {
+        if (!admitida) {
+            fallosPorIp.liberar(clavePorIp, reservaPorIp);
             CorsConfiguration configuracion = cors.getCorsConfiguration(request);
             if (configuracion != null && !new DefaultCorsProcessor().processRequest(configuracion, request, response)) {
                 return;
@@ -84,38 +99,10 @@ public class LimiteDeIntentosFilter extends OncePerRequestFilter {
         try {
             chain.doFilter(request, captura);
         } finally {
-            if (!numero.isEmpty() && captura.getStatus() != 404) {
-                liberar(fallos, numero, reserva);
+            if (numeroValido && captura.getStatus() != 404) {
+                fallosPorIp.liberar(clavePorIp, reservaPorIp);
+                fallos.liberar(numero, reservaGlobal);
             }
         }
-    }
-
-    private synchronized void liberar(Map<String, Ventana> mapa, String clave, Long hasta) {
-        Ventana ventana = mapa.get(clave);
-        if (ventana != null && hasta != null && ventana.hasta() == hasta) {
-            if (ventana.cantidad() <= 1) {
-                mapa.remove(clave);
-            } else {
-                mapa.put(clave, new Ventana(ventana.hasta(), ventana.cantidad() - 1));
-            }
-        }
-    }
-
-    private synchronized Long registrar(Map<String, Ventana> mapa, String clave, int limite) {
-        long ahora = clock.millis();
-        Ventana ventana = mapa.get(clave);
-        if (ventana == null || ventana.hasta() <= ahora) {
-            mapa.entrySet().removeIf(e -> e.getValue().hasta() <= ahora);
-            if (mapa.size() >= MAX_KEYS && !mapa.containsKey(clave)) {
-                return null;
-            }
-            mapa.put(clave, new Ventana(ahora + ventanaMillis, 1));
-            return ahora + ventanaMillis;
-        }
-        if (ventana.cantidad() >= limite) {
-            return null;
-        }
-        mapa.put(clave, new Ventana(ventana.hasta(), ventana.cantidad() + 1));
-        return ventana.hasta();
     }
 }

@@ -20,8 +20,9 @@ class LimiteDeIntentosFilterTest {
         CorsConfiguration cors = new CorsConfiguration();
         cors.addAllowedOrigin("https://cliente.example");
         cors.addAllowedMethod("GET");
-        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(10, 2, 60,
-                Clock.fixed(Instant.parse("2026-11-16T12:00:00Z"), ZoneOffset.UTC), request -> cors);
+        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(10, 2, 2, 60,
+                Clock.fixed(Instant.parse("2026-11-16T12:00:00Z"), ZoneOffset.UTC), request -> cors,
+                new IpDelCliente(0, ""));
         for (int i = 0; i < 3; i++) {
             MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/pickups/self-service/RC0123456789AB");
             request.setServletPath("/api/pickups/self-service/RC0123456789AB");
@@ -50,7 +51,7 @@ class LimiteDeIntentosFilterTest {
 
     @Test
     void limitaIpIndependientementeDelNumeroYCuentaExitos() throws Exception {
-        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(2, 10, 60, Clock.systemUTC(), request -> null);
+        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(2, 10, 5, 60, Clock.systemUTC(), request -> null, new IpDelCliente(0, ""));
         assertEquals(200, solicitar(filtro, "192.0.2.1", "RC0123456789AB", 200).getStatus());
         assertEquals(200, solicitar(filtro, "192.0.2.1", "RC0123456789AC", 200).getStatus());
         MockHttpServletResponse bloqueada = solicitar(filtro, "192.0.2.1", "RC0123456789AD", 200);
@@ -61,7 +62,7 @@ class LimiteDeIntentosFilterTest {
 
     @Test
     void limitaNumeroEntreIpsNormalizaParametrosYLiberaExitos() throws Exception {
-        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(20, 2, 60, Clock.systemUTC(), request -> null);
+        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(20, 2, 2, 60, Clock.systemUTC(), request -> null, new IpDelCliente(0, ""));
         assertEquals(404, solicitar(filtro, "192.0.2.1", "RC0123456789AB;foo=bar", 404).getStatus());
         assertEquals(200, solicitar(filtro, "192.0.2.2", "RC0123456789AB/schedule", 200).getStatus());
         assertEquals(404, solicitar(filtro, "192.0.2.2", "RC0123456789AB/cancel", 404).getStatus());
@@ -71,7 +72,7 @@ class LimiteDeIntentosFilterTest {
 
     @Test
     void reservaConcurrenteImpideSuperarLimiteYSeLiberaAlCompletar() throws Exception {
-        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(20, 1, 60, Clock.systemUTC(), request -> null);
+        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(20, 1, 1, 60, Clock.systemUTC(), request -> null, new IpDelCliente(0, ""));
         CountDownLatch dentro = new CountDownLatch(1);
         CountDownLatch continuar = new CountDownLatch(1);
         try (var executor = Executors.newSingleThreadExecutor()) {
@@ -101,5 +102,27 @@ class LimiteDeIntentosFilterTest {
             assertEquals(200, primera.get(5, TimeUnit.SECONDS));
             assertEquals(200, solicitar(filtro, "192.0.2.2", "RC0123456789AB", 200).getStatus());
         }
+    }
+
+    @Test
+    void cuotaPorIpNoBloqueaOtraIpPeroElTechoGlobalSi() throws Exception {
+        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(100, 3, 2, 60,
+                Clock.systemUTC(), request -> null, new IpDelCliente(0, ""));
+        assertEquals(404, solicitar(filtro, "192.0.2.1", "RC0123456789AB", 404).getStatus());
+        assertEquals(404, solicitar(filtro, "192.0.2.1", "RC0123456789AB", 404).getStatus());
+        assertEquals(429, solicitar(filtro, "192.0.2.1", "RC0123456789AB", 200).getStatus());
+        assertEquals(200, solicitar(filtro, "192.0.2.2", "RC0123456789AB", 200).getStatus());
+        assertEquals(404, solicitar(filtro, "192.0.2.2", "RC0123456789AB", 404).getStatus());
+        assertEquals(429, solicitar(filtro, "192.0.2.3", "RC0123456789AB", 200).getStatus());
+    }
+
+    @Test
+    void formatoInvalidoSoloCuentaContraLaIp() throws Exception {
+        LimiteDeIntentosFilter filtro = new LimiteDeIntentosFilter(3, 1, 1, 60,
+                Clock.systemUTC(), request -> null, new IpDelCliente(0, ""));
+        assertEquals(404, solicitar(filtro, "192.0.2.1", "abc", 404).getStatus());
+        assertEquals(404, solicitar(filtro, "192.0.2.1", "abc", 404).getStatus());
+        assertEquals(200, solicitar(filtro, "192.0.2.1", "RC0123456789AB", 200).getStatus());
+        assertEquals(429, solicitar(filtro, "192.0.2.1", "abc", 404).getStatus());
     }
 }

@@ -64,6 +64,14 @@ class AutogestionRecogidasTest {
     }
 
     @Test
+    void formatoInvalidoSeRechazaAntesDeConsultarOComprobarCodigo() {
+        assertThrows(IllegalArgumentException.class, () -> consultar.delRemitente("abc", "MAL"));
+        assertThrows(IllegalArgumentException.class, () -> admitir.cancelarComoRemitente("abc", "MAL", "motivo"));
+        assertThrows(IllegalArgumentException.class, () -> admitir.reprogramarComoRemitente("abc", "MAL", LocalDate.now(), "08:00-10:00"));
+        verifyNoInteractions(recogidas, codigos, publisher);
+    }
+
+    @Test
     void envioAvanzadoYDuplicadoSeRechazan() {
         EnviosRegistrados registrados = tracking -> Optional.of(new EnviosRegistrados.EnvioRegistrado(tracking, 1L, "IN_TRANSIT"));
         assertThrows(EnvioYaEnRecorridoException.class, () -> registrados.exigir("TF0123456789AB", 1L));

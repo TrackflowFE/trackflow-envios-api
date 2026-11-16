@@ -243,6 +243,7 @@ public class AdmitirRecogida {
     }
 
     private void exigirCodigo(String pickupNumber, String codigo) {
+        PickupNumber.of(pickupNumber);
         Pickup pickup = recogidas.findByNumber(pickupNumber).orElse(null);
         boolean valido = codigos.coincide(codigo, pickup == null ? null : pickup.getManagementCodeHash());
         if (pickup == null || !pickup.admiteAutogestion() || !valido) {
