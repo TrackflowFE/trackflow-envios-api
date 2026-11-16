@@ -1,5 +1,6 @@
 package com.trackflow.modules.shipments.application;
 
+import com.trackflow.modules.shipments.domain.NumeroDeSeguimientoInvalidoException;
 import com.trackflow.modules.shipments.domain.Shipment;
 import com.trackflow.modules.shipments.domain.ShipmentNotFoundException;
 import com.trackflow.modules.shipments.domain.TrackingNumber;
@@ -24,7 +25,12 @@ public class ConsultarComprobante {
 
     @Transactional(readOnly = true)
     public Comprobante porNumero(String trackingNumber) {
-        TrackingNumber numero = TrackingNumber.of(trackingNumber);
+        TrackingNumber numero;
+        try {
+            numero = TrackingNumber.of(trackingNumber);
+        } catch (IllegalArgumentException e) {
+            throw new NumeroDeSeguimientoInvalidoException(trackingNumber);
+        }
         Shipment shipment = shipments.findByTrackingNumber(numero)
                 .orElseThrow(() -> new ShipmentNotFoundException(trackingNumber));
 

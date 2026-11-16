@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.trackflow.modules.shipments.domain.NumeroDeSeguimientoInvalidoException;
 import com.trackflow.modules.shipments.domain.Party;
 import com.trackflow.modules.shipments.domain.Shipment;
 import com.trackflow.modules.shipments.domain.ShipmentNotFoundException;
@@ -56,6 +57,6 @@ class ConsultarComprobanteTest {
 
     @Test
     void unFormatoInvalidoSeRechazaAntesDeConsultar() {
-        assertThrows(IllegalArgumentException.class, () -> consultar.porNumero("no-es-una-guia"));
+        assertThrows(NumeroDeSeguimientoInvalidoException.class, () -> consultar.porNumero("no-es-una-guia"));
     }
 }

@@ -19,6 +19,7 @@ import com.trackflow.modules.shipments.application.Comprobante;
 import com.trackflow.modules.shipments.application.ConsultarComprobante;
 import com.trackflow.modules.shipments.application.EnvioSolicitado;
 import com.trackflow.modules.shipments.domain.DocumentoInvalidoException;
+import com.trackflow.modules.shipments.domain.NumeroDeSeguimientoInvalidoException;
 import com.trackflow.modules.shipments.domain.Party;
 import com.trackflow.modules.shipments.domain.ShipmentNotFoundException;
 import com.trackflow.modules.shipments.domain.TipoDocumento;
@@ -132,11 +133,20 @@ class ShipmentControllerTest {
     @Test
     void unComprobanteConFormatoInvalidoResponde400() throws Exception {
         when(consultar.porNumero("no-es-guia"))
-                .thenThrow(new IllegalArgumentException("Número de seguimiento inválido: no-es-guia"));
+                .thenThrow(new NumeroDeSeguimientoInvalidoException("no-es-guia"));
 
         mvc.perform(get("/api/shipments/no-es-guia/receipt"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Número de seguimiento inválido"));
+    }
+
+    @Test
+    void otroArgumentoInvalidoDelRegistroNoSeConfundeConLaGuia() throws Exception {
+        when(admitir.ejecutar(any())).thenThrow(new IllegalArgumentException("dato inválido"));
+
+        enviar(SOLICITUD)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Solicitud inválida"));
     }
 
     @Test
