@@ -7,15 +7,21 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.trackflow.bootstrap.ValidationExceptionHandler;
 import com.trackflow.modules.shipments.application.AdmitirEnvio;
+import com.trackflow.modules.shipments.application.Comprobante;
+import com.trackflow.modules.shipments.application.ConsultarComprobante;
 import com.trackflow.modules.shipments.application.EnvioSolicitado;
 import com.trackflow.modules.shipments.domain.DocumentoInvalidoException;
+import com.trackflow.modules.shipments.domain.NumeroDeSeguimientoInvalidoException;
 import com.trackflow.modules.shipments.domain.Party;
+import com.trackflow.modules.shipments.domain.ShipmentNotFoundException;
 import com.trackflow.modules.shipments.domain.TipoDocumento;
 import com.trackflow.shared.geografia.Ciudad;
 import com.trackflow.shared.geografia.CiudadDesconocidaException;
@@ -34,6 +40,7 @@ class ShipmentControllerTest {
 
     private static final Ciudad MEDELLIN = new Ciudad(1L, "MEDELLÍN", "ANTIOQUIA");
     private static final Ciudad BOGOTA = new Ciudad(10L, "BOGOTÁ D.C.", "BOGOTÁ");
+    private static final Instant REGISTRADO = Instant.parse("2026-10-15T18:00:00Z");
 
     private static final String SOLICITUD = """
             {
@@ -46,7 +53,8 @@ class ShipmentControllerTest {
             """;
 
     private final AdmitirEnvio admitir = mock(AdmitirEnvio.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ShipmentController(admitir))
+    private final ConsultarComprobante consultar = mock(ConsultarComprobante.class);
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ShipmentController(admitir, consultar))
             .setControllerAdvice(new ValidationExceptionHandler(), new ShipmentsExceptionHandler())
             .build();
 
@@ -54,12 +62,17 @@ class ShipmentControllerTest {
         return mvc.perform(post("/api/shipments").contentType(MediaType.APPLICATION_JSON).content(cuerpo));
     }
 
+    private static Comprobante comprobante() {
+        return new Comprobante("TF0123456789AB", REGISTRADO, "Ana Torres",
+                "MEDELLÍN - ANTIOQUIA", "Luis Gómez", "BOGOTÁ D.C. - BOGOTÁ");
+    }
+
     @Test
     void admiteElEnvioYRespondeAceptadoConElNumeroDeSeguimiento() throws Exception {
         EnvioSolicitado solicitud = new EnvioSolicitado("evt-1", "TF0123456789AB",
                 new Party("Ana Torres", TipoDocumento.CC, "1000000001", "3000000001", "Calle 1 # 1-1", 1L),
                 new Party("Luis Gómez", TipoDocumento.CC, "2000000002", "3000000002", "Carrera 2 # 2-2", 10L),
-                MEDELLIN, BOGOTA, "Documentos", Instant.parse("2026-10-15T18:00:00Z"));
+                MEDELLIN, BOGOTA, "Documentos", REGISTRADO);
         when(admitir.ejecutar(any())).thenReturn(solicitud);
 
         enviar(SOLICITUD)
@@ -69,7 +82,13 @@ class ShipmentControllerTest {
                 .andExpect(jsonPath("$.recipient").value("Luis Gómez"))
                 .andExpect(jsonPath("$.destinationCity").value("BOGOTÁ D.C. - BOGOTÁ"))
                 .andExpect(jsonPath("$.requestedAt").value("2026-10-15T18:00:00Z"))
-                .andExpect(jsonPath("$.processingStatus").value("QUEUED"));
+                .andExpect(jsonPath("$.processingStatus").value("QUEUED"))
+                .andExpect(jsonPath("$.receipt.trackingNumber").value("TF0123456789AB"))
+                .andExpect(jsonPath("$.receipt.registeredAt").value("2026-10-15T18:00:00Z"))
+                .andExpect(jsonPath("$.receipt.senderName").value("Ana Torres"))
+                .andExpect(jsonPath("$.receipt.originCity").value("MEDELLÍN - ANTIOQUIA"))
+                .andExpect(jsonPath("$.receipt.recipientName").value("Luis Gómez"))
+                .andExpect(jsonPath("$.receipt.destinationCity").value("BOGOTÁ D.C. - BOGOTÁ"));
 
         ArgumentCaptor<AdmitirEnvio.Command> comando = ArgumentCaptor.forClass(AdmitirEnvio.Command.class);
         verify(admitir).ejecutar(comando.capture());
@@ -81,6 +100,53 @@ class ShipmentControllerTest {
         assertEquals(1L, comando.getValue().remitente().ciudadId());
         assertEquals(10L, comando.getValue().destinatario().ciudadId());
         assertEquals("Documentos", comando.getValue().descripcion());
+    }
+
+    @Test
+    void elComprobanteSeReimprimeConLosSeisCamposYSinDatosPrivados() throws Exception {
+        when(consultar.porNumero("TF0123456789AB")).thenReturn(comprobante());
+
+        mvc.perform(get("/api/shipments/TF0123456789AB/receipt"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.trackingNumber").value("TF0123456789AB"))
+                .andExpect(jsonPath("$.registeredAt").value("2026-10-15T18:00:00Z"))
+                .andExpect(jsonPath("$.senderName").value("Ana Torres"))
+                .andExpect(jsonPath("$.originCity").value("MEDELLÍN - ANTIOQUIA"))
+                .andExpect(jsonPath("$.recipientName").value("Luis Gómez"))
+                .andExpect(jsonPath("$.destinationCity").value("BOGOTÁ D.C. - BOGOTÁ"))
+                .andExpect(jsonPath("$.phone").doesNotExist())
+                .andExpect(jsonPath("$.address").doesNotExist())
+                .andExpect(jsonPath("$.documentNumber").doesNotExist());
+    }
+
+    @Test
+    void unComprobanteDeUnEnvioInexistenteResponde404() throws Exception {
+        when(consultar.porNumero("TF0123456789AB"))
+                .thenThrow(new ShipmentNotFoundException("TF0123456789AB"));
+
+        mvc.perform(get("/api/shipments/TF0123456789AB/receipt"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Envío no encontrado"));
+    }
+
+    @Test
+    void unComprobanteConFormatoInvalidoResponde400() throws Exception {
+        when(consultar.porNumero("no-es-guia"))
+                .thenThrow(new NumeroDeSeguimientoInvalidoException("no-es-guia"));
+
+        mvc.perform(get("/api/shipments/no-es-guia/receipt"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Número de seguimiento inválido"));
+    }
+
+    @Test
+    void otroArgumentoInvalidoDelRegistroNoSeConfundeConLaGuia() throws Exception {
+        when(admitir.ejecutar(any())).thenThrow(new IllegalArgumentException("dato inválido"));
+
+        enviar(SOLICITUD)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Solicitud inválida"));
     }
 
     @Test

@@ -6,6 +6,7 @@ import com.trackflow.shared.geografia.CatalogoDeCiudades;
 import com.trackflow.shared.geografia.Ciudad;
 import com.trackflow.shared.geografia.CoberturaLogistica;
 import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -60,7 +61,9 @@ public class AdmitirEnvio {
                 ciudadRemitente,
                 ciudadDestino,
                 command.descripcion(),
-                clock.instant());
+                // Postgres guarda timestamp(6): se recorta aquí para que la fecha que
+                // devuelve el POST sea exactamente la que luego lee la reimpresión.
+                clock.instant().truncatedTo(ChronoUnit.MICROS));
 
         publisher.publicar(solicitud);
 
