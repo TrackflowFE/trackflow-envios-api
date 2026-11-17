@@ -14,11 +14,11 @@ class RecogidaResponseTest {
     @Test
     void ocultaContactoDireccionYDetalleLibreSinAsignacion() {
         Instant now = Instant.parse("2026-11-16T12:00:00Z");
-        Pickup pickup = Pickup.registrar(PickupNumber.of("RC0123456789AB"), "Direccion privada", 1L,
+        Pickup pickup = Pickup.registrar(PickupNumber.of("RC0123456789AB"), "Dirección privada", 1L,
                 "Ana Torres", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
                 PackageSize.MEDIUM, BigDecimal.ONE, null, null, "operador", now);
         PickupEvent event = new PickupEvent("e1", "RC0123456789AB", PickupEventType.CANCELLED,
-                PickupStatus.REQUESTED, PickupStatus.CANCELLED, "Direccion privada", "operador", now);
+                PickupStatus.REQUESTED, PickupStatus.CANCELLED, "Dirección privada", "operador", now);
         PickupEvent horario = new PickupEvent("e2", "RC0123456789AB", PickupEventType.RESCHEDULED,
                 PickupStatus.REQUESTED, PickupStatus.REQUESTED, "De ayer a hoy", "operador", now);
         RecogidaResponse response = RecogidaResponse.from(new VistaDeRecogida(pickup, "Medellin", List.of(event, horario), false));
@@ -33,7 +33,7 @@ class RecogidaResponseTest {
     @Test
     void remitenteNoVeIdentidadesNiDetallesLibresDeOperador() {
         Instant now = Instant.parse("2026-11-16T12:00:00Z");
-        Pickup pickup = Pickup.registrar(PickupNumber.of("RC0123456789AB"), "Direccion privada", 1L,
+        Pickup pickup = Pickup.registrar(PickupNumber.of("RC0123456789AB"), "Dirección privada", 1L,
                 "Ana Torres", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
                 PackageSize.MEDIUM, BigDecimal.ONE, null, "operador.secreto", "creador.secreto", now);
         List<PickupEvent> history = List.of(
@@ -51,7 +51,7 @@ class RecogidaResponseTest {
         assertNull(response.assignedUsername());
         assertEquals("operación", response.requestedBy());
         assertTrue(response.assigned());
-        assertEquals("Direccion privada", response.address());
+        assertEquals("Dirección privada", response.address());
         assertEquals("Ana Torres", response.contactName());
         assertFalse(response.accessRestricted());
         assertEquals(4, response.history().size());
@@ -72,7 +72,7 @@ class RecogidaResponseTest {
     @Test
     void soloExponeHorariosEstructuradosYActorPublico() {
         Instant now = Instant.parse("2026-11-16T12:00:00Z");
-        Pickup pickup = Pickup.registrar(PickupNumber.of("RC0123456789AB"), "Direccion", 1L,
+        Pickup pickup = Pickup.registrar(PickupNumber.of("RC0123456789AB"), "Dirección", 1L,
                 "Ana", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
                 PackageSize.MEDIUM, BigDecimal.ONE, null, null, "remitente", now);
         String detalle = "De 2026-11-17 08:00-10:00 a 2026-11-18 10:00-12:00";

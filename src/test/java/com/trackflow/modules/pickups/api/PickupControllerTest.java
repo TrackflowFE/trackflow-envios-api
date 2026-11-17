@@ -96,7 +96,7 @@ class PickupControllerTest {
     @Test
     void devuelveDatosPrivadosSoloAlAsignado() throws Exception {
         Instant now = Instant.parse("2026-11-16T12:00:00Z");
-        Pickup pickup = Pickup.registrar(PickupNumber.of("RC0123456789AB"), "Direccion privada", 1L,
+        Pickup pickup = Pickup.registrar(PickupNumber.of("RC0123456789AB"), "Dirección privada", 1L,
                 "Ana", "3001234567", LocalDate.of(2026, 11, 17), "08:00-10:00",
                 PackageSize.MEDIUM, BigDecimal.ONE, null, null, "remitente", now);
         pickup.reprogramar(pickup.getScheduledDate(), pickup.getTimeSlot(), "asignado", now);
@@ -111,7 +111,7 @@ class PickupControllerTest {
                 var resultado = mvc.perform(get("/api/pickups/RC0123456789AB"))
                         .andExpect(status().isOk()).andExpect(jsonPath("$.accessRestricted").value(!usuario.equals("asignado")));
                 if (usuario.equals("asignado")) {
-                    resultado.andExpect(jsonPath("$.address").value("Direccion privada"))
+                    resultado.andExpect(jsonPath("$.address").value("Dirección privada"))
                             .andExpect(jsonPath("$.contactName").value("Ana"))
                             .andExpect(jsonPath("$.contactPhone").value("3001234567"))
                             .andExpect(jsonPath("$.history[0].detail").value("motivo privado"));
