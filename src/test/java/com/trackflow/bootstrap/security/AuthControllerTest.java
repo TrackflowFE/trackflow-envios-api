@@ -35,9 +35,11 @@ class AuthControllerTest {
     private final Auditorias auditorias = mock(Auditorias.class);
     private final PasswordEncoder encoder = new BCryptPasswordEncoder(4);
     private final Clock clock = Clock.fixed(AHORA, ZoneOffset.UTC);
-    private final SecurityProperties propiedades = new SecurityProperties(SECRETO, "operador", "clave-op", "supervisor", "", "admin", "", 480, 30, 5, 15);
+    private final SecurityProperties propiedades = new SecurityProperties(SECRETO, "operador", "clave-op", "supervisor", "", "admin", "", 480, 30);
+    // Tope de 5 fallos dentro de 15 minutos, con bloqueo de otros 15 (HU-09).
+    private final BloqueoProperties bloqueo = new BloqueoProperties(5, 15, 15);
     private final JwtConfig jwt = new JwtConfig(propiedades);
-    private final AuthController controller = new AuthController(propiedades, jwt.jwtEncoder(), usuarios, sesiones,
+    private final AuthController controller = new AuthController(propiedades, bloqueo, jwt.jwtEncoder(), usuarios, sesiones,
             encoder, auditorias, clock);
 
     @BeforeEach
@@ -101,8 +103,8 @@ class AuthControllerTest {
 
     @Test
     void sinCredencialesConfiguradasElIngresoNoEstaDisponible() {
-        SecurityProperties abiertas = new SecurityProperties(SECRETO, "operador", "", "supervisor", "", "admin", "", 480, 30, 5, 15);
-        AuthController sinProteccion = new AuthController(abiertas, jwt.jwtEncoder(), usuarios, sesiones, encoder,
+        SecurityProperties abiertas = new SecurityProperties(SECRETO, "operador", "", "supervisor", "", "admin", "", 480, 30);
+        AuthController sinProteccion = new AuthController(abiertas, bloqueo, jwt.jwtEncoder(), usuarios, sesiones, encoder,
                 auditorias, clock);
 
         ResponseStatusException e = assertThrows(ResponseStatusException.class,

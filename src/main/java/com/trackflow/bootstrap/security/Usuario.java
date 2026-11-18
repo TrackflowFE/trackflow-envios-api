@@ -58,6 +58,10 @@ public class Usuario {
     @Column(name = "locked_until")
     private Instant lockedUntil;
 
+    /** Cuando fue el ultimo fallo, para saber si los anteriores siguen contando. */
+    @Column(name = "last_failed_at")
+    private Instant lastFailedAt;
+
     protected Usuario() {
     }
 
@@ -105,13 +109,24 @@ public class Usuario {
         return failedAttempts;
     }
 
+    public Instant getLastFailedAt() {
+        return lastFailedAt;
+    }
+
     /**
      * Suma un intento fallido y bloquea la cuenta al llegar al tope.
      *
-     * @return true si este intento dejó la cuenta bloqueada
+     * Solo cuentan los fallos ocurridos dentro de la ventana (HU-09): si el anterior
+     * es mas viejo, la cuenta empieza de nuevo. Equivocarse al teclear una vez cada
+     * tanto no debe acercar a nadie al bloqueo.
+     *
+     * @return true si este intento dejo la cuenta bloqueada
      */
-    public boolean registrarIntentoFallido(int tope, Duration bloqueo, Instant ahora) {
-        failedAttempts++;
+    public boolean registrarIntentoFallido(int tope, Duration ventana, Duration bloqueo, Instant ahora) {
+        boolean sigueLaRacha = lastFailedAt != null && lastFailedAt.isAfter(ahora.minus(ventana));
+        failedAttempts = sigueLaRacha ? failedAttempts + 1 : 1;
+        lastFailedAt = ahora;
+
         if (failedAttempts < tope) {
             return false;
         }
@@ -121,13 +136,13 @@ public class Usuario {
 
     /** Tras entrar bien: el contador solo cuenta fallos seguidos, no acumulados. */
     public void registrarIngresoCorrecto() {
-        failedAttempts = 0;
-        lockedUntil = null;
+        desbloquear();
     }
 
     public void desbloquear() {
         failedAttempts = 0;
         lockedUntil = null;
+        lastFailedAt = null;
     }
 
     public void cambiarRoles(String roles) {
