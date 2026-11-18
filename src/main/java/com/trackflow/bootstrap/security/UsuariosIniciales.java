@@ -56,6 +56,14 @@ public class UsuariosIniciales implements ApplicationRunner {
 
         usuarios.findById(username).ifPresentOrElse(
                 usuario -> {
+                    // HU-10: si el dueño cambió su clave (o la recuperó por correo), manda
+                    // la suya. Sin esta salvedad, el siguiente reinicio la devolvería al
+                    // valor del entorno y el cambio se perdería sin que nadie lo note.
+                    if (usuario.isPasswordSetByUser()) {
+                        log.info("La clave del usuario '{}' la gobierna su titular: el entorno no la toca",
+                                username);
+                        return;
+                    }
                     if (!encoder.matches(clave, usuario.getPasswordHash())) {
                         usuario.cambiarPasswordHash(encoder.encode(clave));
                         log.info("Clave del usuario '{}' actualizada desde el entorno", username);

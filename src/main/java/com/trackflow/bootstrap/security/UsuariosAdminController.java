@@ -1,6 +1,7 @@
 package com.trackflow.bootstrap.security;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import java.time.Instant;
@@ -33,18 +34,25 @@ public class UsuariosAdminController {
                     message = "use entre 3 y 50 caracteres: letras, números, punto, guion o guion bajo")
             String username,
             @NotBlank(message = "la contraseña es obligatoria") String clave,
-            @NotBlank(message = "indique al menos un rol") String roles) {
+            @NotBlank(message = "indique al menos un rol") String roles,
+            @Email(message = "el correo no tiene un formato válido") String email) {
+    }
+
+    /** Un correo vacío o ausente retira el que hubiera. */
+    public record CambiarEmailRequest(
+            @Email(message = "el correo no tiene un formato válido") String email) {
     }
 
     public record CambiarRolesRequest(@NotBlank(message = "indique al menos un rol") String roles) {
     }
 
     public record UsuarioResponse(String username, String roles, boolean activo, boolean bloqueado,
-            Instant bloqueadoHasta, int intentosFallidos) {
+            Instant bloqueadoHasta, int intentosFallidos, String email) {
 
         static UsuarioResponse de(Usuario usuario, Instant ahora) {
             return new UsuarioResponse(usuario.getUsername(), usuario.getRoles(), usuario.isActive(),
-                    usuario.bloqueado(ahora), usuario.getLockedUntil(), usuario.getFailedAttempts());
+                    usuario.bloqueado(ahora), usuario.getLockedUntil(), usuario.getFailedAttempts(),
+                    usuario.getEmail());
         }
     }
 
@@ -71,7 +79,8 @@ public class UsuariosAdminController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public UsuarioResponse crear(@AuthenticationPrincipal Jwt quien, @Valid @RequestBody CrearUsuarioRequest peticion) {
-        Usuario creado = gestion.crear(actor(quien), peticion.username(), peticion.clave(), peticion.roles());
+        Usuario creado = gestion.crear(actor(quien), peticion.username(), peticion.clave(), peticion.roles(),
+                peticion.email());
         return UsuarioResponse.de(creado, clock.instant());
     }
 
@@ -85,6 +94,17 @@ public class UsuariosAdminController {
     public UsuarioResponse cambiarActivo(@AuthenticationPrincipal Jwt quien, @PathVariable String username,
             @RequestParam boolean valor) {
         return UsuarioResponse.de(gestion.cambiarActivo(actor(quien), username, valor), clock.instant());
+    }
+
+    /**
+     * Define el correo por el que esa persona podrá recuperar su clave (HU-10). Lo
+     * hace el administrador: dejar que cada quien cambie el suyo convertiría una
+     * sesión ajena en un camino para apropiarse de la cuenta.
+     */
+    @PutMapping("/{username}/email")
+    public UsuarioResponse cambiarEmail(@AuthenticationPrincipal Jwt quien, @PathVariable String username,
+            @Valid @RequestBody CambiarEmailRequest peticion) {
+        return UsuarioResponse.de(gestion.cambiarEmail(actor(quien), username, peticion.email()), clock.instant());
     }
 
     @PostMapping("/{username}/desbloquear")

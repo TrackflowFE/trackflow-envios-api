@@ -29,6 +29,21 @@ public class Usuario {
     @Column(nullable = false, length = 100)
     private String roles;
 
+    /**
+     * Correo de contacto, opcional: es por donde viaja el enlace de recuperacion
+     * (HU-10). Quien no lo tenga definido no puede recuperar la clave por correo y
+     * depende de que un administrador se la cambie.
+     */
+    @Column(length = 120)
+    private String email;
+
+    /**
+     * Cierto cuando la contrasena la fijo su dueno (cambio o recuperacion, HU-10).
+     * Desde ese momento el arranque ya no la sobreescribe con la del entorno.
+     */
+    @Column(name = "password_set_by_user", nullable = false)
+    private boolean passwordSetByUser;
+
     @Column(nullable = false)
     private boolean active;
 
@@ -64,6 +79,14 @@ public class Usuario {
 
     public String getRoles() {
         return roles;
+    }
+
+    public String getEmail() {
+        return email;
+    }
+
+    public boolean isPasswordSetByUser() {
+        return passwordSetByUser;
     }
 
     public boolean isActive() {
@@ -117,5 +140,21 @@ public class Usuario {
 
     void cambiarPasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    /**
+     * Cambia la clave por decision de su dueno: ademas de guardar el nuevo hash,
+     * deja la cuenta fuera del alcance de las claves del entorno y la desbloquea,
+     * porque quien acaba de demostrar que es el dueno no debe seguir bloqueado por
+     * intentos anteriores.
+     */
+    void cambiarClavePropia(String passwordHash) {
+        this.passwordHash = passwordHash;
+        this.passwordSetByUser = true;
+        desbloquear();
+    }
+
+    void cambiarEmail(String email) {
+        this.email = email;
     }
 }

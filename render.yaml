@@ -44,3 +44,17 @@ services:
       # Dominio(s) del frontend, separados por comas. Sin él solo se admite localhost.
       - key: TRACKFLOW_CORS_ORIGINS
         sync: false
+      # Recuperación de contraseña (HU-10). Sin servidor SMTP los enlaces no salen:
+      # quedan en los logs y nadie puede recuperar su clave.
+      - key: TRACKFLOW_SMTP_HOST
+        sync: false
+      - key: TRACKFLOW_SMTP_USUARIO
+        sync: false
+      - key: TRACKFLOW_SMTP_CLAVE
+        sync: false
+      - key: TRACKFLOW_CORREO_REMITENTE
+        sync: false
+      # Página del frontend donde la persona escribe su clave nueva; el enlace del
+      # correo apunta aquí y le añade ?token=...
+      - key: TRACKFLOW_URL_RESTABLECER
+        sync: false

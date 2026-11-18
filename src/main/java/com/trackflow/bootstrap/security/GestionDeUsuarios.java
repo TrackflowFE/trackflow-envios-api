@@ -2,6 +2,7 @@ package com.trackflow.bootstrap.security;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,19 +24,19 @@ public class GestionDeUsuarios {
     private static final Set<String> ROLES_VALIDOS = Set.of(
             SecurityProperties.ROL_OPERADOR, SecurityProperties.ROL_SUPERVISOR, SecurityProperties.ROL_ADMIN);
 
-    private static final int CLAVE_MINIMA = 10;
-
     private final UsuarioRepository usuarios;
     private final Sesiones sesiones;
     private final Auditorias auditorias;
+    private final PoliticaDeClaves politica;
     private final PasswordEncoder encoder;
     private final Clock clock;
 
     public GestionDeUsuarios(UsuarioRepository usuarios, Sesiones sesiones, Auditorias auditorias,
-            PasswordEncoder encoder, Clock clock) {
+            PoliticaDeClaves politica, PasswordEncoder encoder, Clock clock) {
         this.usuarios = usuarios;
         this.sesiones = sesiones;
         this.auditorias = auditorias;
+        this.politica = politica;
         this.encoder = encoder;
         this.clock = clock;
     }
@@ -45,18 +46,63 @@ public class GestionDeUsuarios {
         return usuarios.findAll();
     }
 
+    /**
+     * @param email correo de contacto, opcional: sin él la persona no podrá recuperar
+     *              su clave por correo (HU-10) y dependerá de un administrador
+     */
     @Transactional
-    public Usuario crear(String actor, String username, String clave, String roles) {
+    public Usuario crear(String actor, String username, String clave, String roles, String email) {
         if (usuarios.existsById(username)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe un usuario con ese nombre");
         }
-        validarClave(clave);
+        politica.exigir(clave);
         String normalizados = validarRoles(roles);
 
-        Usuario usuario = usuarios.save(
-                new Usuario(username, encoder.encode(clave), normalizados, true, clock.instant()));
+        Usuario usuario = new Usuario(username, encoder.encode(clave), normalizados, true, clock.instant());
+        if (tieneValor(email)) {
+            exigirCorreoLibre(email, username);
+            usuario.cambiarEmail(email.trim());
+        }
+        usuarios.save(usuario);
         auditorias.registrar(actor, Auditorias.USUARIO_CREADO, username, "roles: " + normalizados);
         return usuario;
+    }
+
+    /**
+     * Define o cambia el correo de contacto. Lo hace un administrador, no el propio
+     * usuario: si cualquiera pudiera apuntar su cuenta a otro correo, el enlace de
+     * recuperación llegaría a donde quisiera quien se hubiera colado en la sesión.
+     */
+    @Transactional
+    public Usuario cambiarEmail(String actor, String username, String email) {
+        Usuario usuario = buscar(username);
+        String nuevo = tieneValor(email) ? email.trim() : null;
+        if (Objects.equals(nuevo, usuario.getEmail())) {
+            return usuario;
+        }
+        if (nuevo != null) {
+            exigirCorreoLibre(nuevo, username);
+        }
+
+        usuario.cambiarEmail(nuevo);
+        // El detalle no guarda el correo: el registro describe el cambio, no el dato.
+        auditorias.registrar(actor, Auditorias.EMAIL_CAMBIADO, username,
+                nuevo == null ? "correo retirado" : "correo de contacto definido");
+        return usuario;
+    }
+
+    /** Dos cuentas con el mismo correo harían ambiguo a quién pertenece un enlace. */
+    private void exigirCorreoLibre(String email, String username) {
+        usuarios.findByEmailIgnoreCase(email.trim())
+                .filter(otro -> !otro.getUsername().equals(username))
+                .ifPresent(otro -> {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Ese correo ya está asociado a otra cuenta");
+                });
+    }
+
+    private static boolean tieneValor(String texto) {
+        return texto != null && !texto.isBlank();
     }
 
     @Transactional
@@ -135,13 +181,6 @@ public class GestionDeUsuarios {
 
     private static boolean esAdmin(String roles) {
         return List.of(roles.split(" ")).contains(SecurityProperties.ROL_ADMIN);
-    }
-
-    private void validarClave(String clave) {
-        if (clave == null || clave.length() < CLAVE_MINIMA) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "La contraseña debe tener al menos " + CLAVE_MINIMA + " caracteres");
-        }
     }
 
     /** Acepta los roles en cualquier orden y mayúsculas, y los devuelve normalizados. */

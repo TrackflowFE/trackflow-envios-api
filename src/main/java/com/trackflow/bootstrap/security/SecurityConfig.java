@@ -59,6 +59,15 @@ public class SecurityConfig {
                     // petición real —GET, POST— sigue evaluándose por las reglas de abajo.
                     auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll();
+                    // HU-10: pedir el enlace de recuperación y aplicar la clave nueva tienen
+                    // que ser públicos, porque quien los usa es precisamente quien no puede
+                    // entrar. Lo que protege el restablecimiento es el token del correo: vale
+                    // media hora y una sola vez.
+                    auth.requestMatchers(HttpMethod.POST, "/api/auth/clave/recuperar",
+                            "/api/auth/clave/restablecer").permitAll();
+                    // Cambiar la clave estando dentro solo exige un token válido, sea cual
+                    // sea el rol; la clave actual la verifica la propia operación.
+                    auth.requestMatchers(HttpMethod.POST, "/api/auth/clave/cambiar").authenticated();
                     // Consultar o cerrar la propia sesión solo exige un token válido, sea
                     // cual sea el rol.
                     auth.requestMatchers(HttpMethod.GET, "/api/auth/sesion").authenticated();
