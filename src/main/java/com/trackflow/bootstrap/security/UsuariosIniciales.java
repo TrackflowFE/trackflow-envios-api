@@ -40,9 +40,13 @@ public class UsuariosIniciales implements ApplicationRunner {
     @Transactional
     public void run(ApplicationArguments args) {
         asegurar(propiedades.operadorUsuario(), propiedades.operadorClave(), SecurityProperties.ROL_OPERADOR);
-        // El administrador también es operador: hereda sus permisos.
+        // El supervisor solo consulta: no hereda los permisos del operador.
+        asegurar(propiedades.supervisorUsuario(), propiedades.supervisorClave(),
+                SecurityProperties.ROL_SUPERVISOR);
+        // El administrador puede todo: administra, opera y consulta reportes.
         asegurar(propiedades.adminUsuario(), propiedades.adminClave(),
-                SecurityProperties.ROL_ADMIN + " " + SecurityProperties.ROL_OPERADOR);
+                SecurityProperties.ROL_ADMIN + " " + SecurityProperties.ROL_OPERADOR
+                        + " " + SecurityProperties.ROL_SUPERVISOR);
     }
 
     private void asegurar(String username, String clave, String roles) {

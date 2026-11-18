@@ -32,6 +32,9 @@ services:
       # Sin clave de operador la escritura queda abierta: definirla siempre aquí.
       - key: TRACKFLOW_OPERADOR_CLAVE
         sync: false
+      # Sin esta clave no existe el supervisor y nadie podrá ver los reportes salvo el admin.
+      - key: TRACKFLOW_SUPERVISOR_CLAVE
+        sync: false
       # Sin esta clave, /api/admin/** queda inaccesible (cerrado por defecto).
       - key: TRACKFLOW_ADMIN_CLAVE
         sync: false

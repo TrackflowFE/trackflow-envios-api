@@ -82,8 +82,9 @@ public class SecurityConfig {
                         // Los reportes muestran la carga de la operación, no el estado de un
                         // envío: no hay número de seguimiento que haga de credencial, así que
                         // no son públicos como /api/tracking. El administrador hereda el rol.
+                        // HU-11: los reportes son para supervision, no para quien registra.
                         auth.requestMatchers(HttpMethod.GET, "/api/reports/**")
-                                .hasRole(SecurityProperties.ROL_OPERADOR);
+                                .hasAnyRole(SecurityProperties.ROL_SUPERVISOR, SecurityProperties.ROL_ADMIN);
                         auth.requestMatchers(HttpMethod.POST, "/api/**")
                                 .hasRole(SecurityProperties.ROL_OPERADOR);
                         // El estado interno del envío y la red de centros son de la
