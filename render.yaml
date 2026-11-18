@@ -54,6 +54,13 @@ services:
         sync: false
       - key: TRACKFLOW_CORREO_REMITENTE
         sync: false
+      # Correo de cada cuenta: sin él, esa persona no puede recuperar su clave sola.
+      - key: TRACKFLOW_OPERADOR_EMAIL
+        sync: false
+      - key: TRACKFLOW_SUPERVISOR_EMAIL
+        sync: false
+      - key: TRACKFLOW_ADMIN_EMAIL
+        sync: false
       # Página del frontend donde la persona escribe su clave nueva; el enlace del
       # correo apunta aquí y le añade ?token=...
       - key: TRACKFLOW_URL_RESTABLECER
