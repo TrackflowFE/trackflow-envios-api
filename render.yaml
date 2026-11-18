@@ -32,6 +32,9 @@ services:
       # Sin clave de operador la escritura queda abierta: definirla siempre aquí.
       - key: TRACKFLOW_OPERADOR_CLAVE
         sync: false
+      # Sin esta clave no existe el supervisor y nadie podrá ver los reportes salvo el admin.
+      - key: TRACKFLOW_SUPERVISOR_CLAVE
+        sync: false
       # Sin esta clave, /api/admin/** queda inaccesible (cerrado por defecto).
       - key: TRACKFLOW_ADMIN_CLAVE
         sync: false
@@ -40,4 +43,25 @@ services:
         sync: false
       # Dominio(s) del frontend, separados por comas. Sin él solo se admite localhost.
       - key: TRACKFLOW_CORS_ORIGINS
+        sync: false
+      # Recuperación de contraseña (HU-10). Sin servidor SMTP los enlaces no salen:
+      # quedan en los logs y nadie puede recuperar su clave.
+      - key: TRACKFLOW_SMTP_HOST
+        sync: false
+      - key: TRACKFLOW_SMTP_USUARIO
+        sync: false
+      - key: TRACKFLOW_SMTP_CLAVE
+        sync: false
+      - key: TRACKFLOW_CORREO_REMITENTE
+        sync: false
+      # Correo de cada cuenta: sin él, esa persona no puede recuperar su clave sola.
+      - key: TRACKFLOW_OPERADOR_EMAIL
+        sync: false
+      - key: TRACKFLOW_SUPERVISOR_EMAIL
+        sync: false
+      - key: TRACKFLOW_ADMIN_EMAIL
+        sync: false
+      # Página del frontend donde la persona escribe su clave nueva; el enlace del
+      # correo apunta aquí y le añade ?token=...
+      - key: TRACKFLOW_URL_RESTABLECER
         sync: false

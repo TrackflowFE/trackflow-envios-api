@@ -14,7 +14,7 @@ class SecurityPropertiesTest {
     private static final String SECRETO_LARGO = "0123456789abcdef0123456789abcdef";
 
     private static SecurityProperties con(String secreto, String claveOperador, String claveAdmin) {
-        return new SecurityProperties(secreto, "operador", claveOperador, "admin", claveAdmin, 480, 30);
+        return new SecurityProperties(secreto, "operador", claveOperador, "supervisor", "", "admin", claveAdmin, 480, 30, 5, 15);
     }
 
     @Test
@@ -38,7 +38,7 @@ class SecurityPropertiesTest {
 
     @Test
     void exponeLosUsuariosClavesYDuraciones() {
-        SecurityProperties propiedades = new SecurityProperties(SECRETO_LARGO, "op", "c1", "ad", "c2", 60, 15);
+        SecurityProperties propiedades = new SecurityProperties(SECRETO_LARGO, "op", "c1", "supervisor", "", "ad", "c2", 60, 15, 5, 15);
 
         assertEquals("op", propiedades.operadorUsuario());
         assertEquals("c1", propiedades.operadorClave());

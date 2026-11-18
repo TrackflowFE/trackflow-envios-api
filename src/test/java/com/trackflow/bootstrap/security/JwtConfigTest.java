@@ -25,7 +25,7 @@ class JwtConfigTest {
     private final Sesiones sesiones = mock(Sesiones.class);
 
     private static JwtConfig con(String secreto) {
-        return new JwtConfig(new SecurityProperties(secreto, "operador", "clave", "admin", "", 480, 30));
+        return new JwtConfig(new SecurityProperties(secreto, "operador", "clave", "supervisor", "", "admin", "", 480, 30, 5, 15));
     }
 
     private static String firmar(JwtEncoder encoder, String jti, Instant expira) {

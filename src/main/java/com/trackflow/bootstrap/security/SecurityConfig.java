@@ -46,12 +46,28 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
                     // El OPTIONS de precomprobación nunca lleva token, por diseño del propio
+                    // HU-13: la ficha completa lleva datos personales sin enmascarar y queda auditada.
+                    auth.requestMatchers(HttpMethod.GET, "/api/shipments/*/ficha/completa")
+                            .hasRole(SecurityProperties.ROL_ADMIN);
+                    // La ficha enmascarada la usa quien atiende el envío.
+                    auth.requestMatchers(HttpMethod.GET, "/api/shipments/*/ficha")
+                            .hasAnyRole(SecurityProperties.ROL_OPERADOR, SecurityProperties.ROL_SUPERVISOR,
+                                    SecurityProperties.ROL_ADMIN);
                     // CORS: si una regla de rol lo alcanza (como pasaba con /api/admin/**, que
                     // no distinguía el método), el navegador ve un 401 en la precomprobación y
                     // ni siquiera intenta la petición real. Dejarlo pasar aquí no abre nada: la
                     // petición real —GET, POST— sigue evaluándose por las reglas de abajo.
                     auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll();
+                    // HU-10: pedir el enlace de recuperación y aplicar la clave nueva tienen
+                    // que ser públicos, porque quien los usa es precisamente quien no puede
+                    // entrar. Lo que protege el restablecimiento es el token del correo: vale
+                    // media hora y una sola vez.
+                    auth.requestMatchers(HttpMethod.POST, "/api/auth/clave/recuperar",
+                            "/api/auth/clave/restablecer").permitAll();
+                    // Cambiar la clave estando dentro solo exige un token válido, sea cual
+                    // sea el rol; la clave actual la verifica la propia operación.
+                    auth.requestMatchers(HttpMethod.POST, "/api/auth/clave/cambiar").authenticated();
                     // Consultar o cerrar la propia sesión solo exige un token válido, sea
                     // cual sea el rol.
                     auth.requestMatchers(HttpMethod.GET, "/api/auth/sesion").authenticated();
@@ -82,8 +98,9 @@ public class SecurityConfig {
                         // Los reportes muestran la carga de la operación, no el estado de un
                         // envío: no hay número de seguimiento que haga de credencial, así que
                         // no son públicos como /api/tracking. El administrador hereda el rol.
+                        // HU-11: los reportes son para supervision, no para quien registra.
                         auth.requestMatchers(HttpMethod.GET, "/api/reports/**")
-                                .hasRole(SecurityProperties.ROL_OPERADOR);
+                                .hasAnyRole(SecurityProperties.ROL_SUPERVISOR, SecurityProperties.ROL_ADMIN);
                         auth.requestMatchers(HttpMethod.POST, "/api/**")
                                 .hasRole(SecurityProperties.ROL_OPERADOR);
                         // El estado interno del envío y la red de centros son de la

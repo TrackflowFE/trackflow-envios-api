@@ -43,6 +43,18 @@ public class Sesiones {
      * Una sesión inactiva o de un usuario desactivado se cierra en el acto, para que
      * no pueda volver a usarse aunque el token aún no haya vencido.
      */
+    /**
+     * Cierra todas las sesiones abiertas de un usuario. Se usa al desactivarlo o
+     * cambiarle el rol (HU-11) y al cambiar su contraseña (HU-10).
+     *
+     * @param conservar jti que sobrevive, o null para cerrarlas todas
+     * @return cuántas se cerraron
+     */
+    @Transactional
+    public int cerrarTodasDe(String username, String conservar) {
+        return repositorio.cerrarAbiertasDe(username, clock.instant(), conservar);
+    }
+
     @Transactional
     public boolean validarYRenovar(String jti) {
         if (jti == null) {

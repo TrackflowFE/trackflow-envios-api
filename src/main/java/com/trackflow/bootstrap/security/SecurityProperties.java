@@ -24,35 +24,49 @@ public class SecurityProperties {
     private static final SecureRandom ALEATORIO = new SecureRandom();
 
     public static final String ROL_OPERADOR = "OPERADOR";
+    /** Supervisa la operacion: consulta reportes, pero no registra ni modifica nada (HU-11). */
+    public static final String ROL_SUPERVISOR = "SUPERVISOR";
     public static final String ROL_ADMIN = "ADMIN";
 
     private final String secreto;
     private final String operadorUsuario;
     private final String operadorClave;
+    private final String supervisorUsuario;
+    private final String supervisorClave;
     private final String adminUsuario;
     private final String adminClave;
     private final Duration duracionToken;
     private final Duration inactividad;
+    private final int intentosAntesDeBloquear;
+    private final Duration duracionBloqueo;
 
     public SecurityProperties(
             @Value("${trackflow.security.jwt-secret:}") String secreto,
             @Value("${trackflow.security.operador-usuario:operador}") String operadorUsuario,
             @Value("${trackflow.security.operador-clave:}") String operadorClave,
+            @Value("${trackflow.security.supervisor-usuario:supervisor}") String supervisorUsuario,
+            @Value("${trackflow.security.supervisor-clave:}") String supervisorClave,
             @Value("${trackflow.security.admin-usuario:admin}") String adminUsuario,
             @Value("${trackflow.security.admin-clave:}") String adminClave,
             @Value("${trackflow.security.duracion-token-minutos:480}") long duracionMinutos,
-            @Value("${trackflow.security.inactividad-minutos:30}") long inactividadMinutos) {
+            @Value("${trackflow.security.inactividad-minutos:30}") long inactividadMinutos,
+            @Value("${trackflow.security.intentos-antes-de-bloquear:5}") int intentosAntesDeBloquear,
+            @Value("${trackflow.security.bloqueo-minutos:15}") long bloqueoMinutos) {
         this.secreto = secreto;
         this.operadorUsuario = operadorUsuario;
         this.operadorClave = operadorClave;
+        this.supervisorUsuario = supervisorUsuario;
+        this.supervisorClave = supervisorClave;
         this.adminUsuario = adminUsuario;
         this.adminClave = adminClave;
         this.duracionToken = Duration.ofMinutes(duracionMinutos);
         this.inactividad = Duration.ofMinutes(inactividadMinutos);
+        this.intentosAntesDeBloquear = intentosAntesDeBloquear;
+        this.duracionBloqueo = Duration.ofMinutes(bloqueoMinutos);
     }
 
     public boolean proteccionActiva() {
-        return !esVacia(operadorClave) || !esVacia(adminClave);
+        return !esVacia(operadorClave) || !esVacia(supervisorClave) || !esVacia(adminClave);
     }
 
     public String operadorUsuario() {
@@ -62,6 +76,14 @@ public class SecurityProperties {
     /** Solo para crear el usuario al arrancar: el login compara contra el hash guardado. */
     public String operadorClave() {
         return operadorClave;
+    }
+
+    public String supervisorUsuario() {
+        return supervisorUsuario;
+    }
+
+    public String supervisorClave() {
+        return supervisorClave;
     }
 
     public String adminUsuario() {
@@ -102,6 +124,16 @@ public class SecurityProperties {
     }
 
     /** Tiempo sin actividad tras el que la sesión se cierra (HU-08). */
+    /** Fallos seguidos que bloquean la cuenta (HU-11). */
+    public int intentosAntesDeBloquear() {
+        return intentosAntesDeBloquear;
+    }
+
+    /** Cuánto dura el bloqueo si nadie la desbloquea antes. */
+    public Duration duracionBloqueo() {
+        return duracionBloqueo;
+    }
+
     public Duration inactividad() {
         return inactividad;
     }

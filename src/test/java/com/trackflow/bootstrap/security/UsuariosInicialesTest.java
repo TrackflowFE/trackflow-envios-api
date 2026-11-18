@@ -29,9 +29,9 @@ class UsuariosInicialesTest {
     private final Clock clock = Clock.fixed(AHORA, ZoneOffset.UTC);
 
     private UsuariosIniciales con(String claveOperador, String claveAdmin) {
-        SecurityProperties propiedades = new SecurityProperties("", "operador", claveOperador, "admin", claveAdmin,
-                480, 30);
-        return new UsuariosIniciales(usuarios, propiedades, encoder, clock);
+        SecurityProperties propiedades = new SecurityProperties("", "operador", claveOperador, "supervisor", "", "admin", claveAdmin, 480, 30, 5, 15);
+        // Sin correos configurados: estas pruebas miran las claves y los roles.
+        return new UsuariosIniciales(usuarios, propiedades, new CorreosIniciales("", "", ""), encoder, clock);
     }
 
     @Test
@@ -50,7 +50,9 @@ class UsuariosInicialesTest {
         assertFalse(operador.getPasswordHash().contains("clave-op"));
         assertTrue(encoder.matches("clave-op", operador.getPasswordHash()));
         assertEquals("admin", admin.getUsername());
-        assertEquals("ADMIN OPERADOR", admin.getRoles());
+        // Desde HU-11 el administrador tambien supervisa: ve los reportes sin que haya
+        // que darle una segunda cuenta.
+        assertEquals("ADMIN OPERADOR SUPERVISOR", admin.getRoles());
         assertTrue(encoder.matches("clave-admin", admin.getPasswordHash()));
     }
 

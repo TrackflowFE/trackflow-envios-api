@@ -16,6 +16,7 @@ import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -53,6 +54,7 @@ public class AuthController {
     private final UsuarioRepository usuarios;
     private final Sesiones sesiones;
     private final PasswordEncoder encoder;
+    private final Auditorias auditorias;
     private final Clock clock;
 
     /**
@@ -63,18 +65,23 @@ public class AuthController {
     private final String hashFicticio;
 
     public AuthController(SecurityProperties propiedades, JwtEncoder jwtEncoder, UsuarioRepository usuarios,
-            Sesiones sesiones, PasswordEncoder encoder, Clock clock) {
+            Sesiones sesiones, PasswordEncoder encoder, Auditorias auditorias, Clock clock) {
         this.propiedades = propiedades;
         this.jwtEncoder = jwtEncoder;
         this.usuarios = usuarios;
         this.sesiones = sesiones;
         this.encoder = encoder;
+        this.auditorias = auditorias;
         this.clock = clock;
         this.hashFicticio = encoder.encode(UUID.randomUUID().toString());
     }
 
     @PostMapping("/login")
     @ResponseStatus(HttpStatus.OK)
+    // Transaccional porque el intento fallido y el reinicio del contador se guardan.
+    // Sin noRollbackFor, rechazar el ingreso revertiria el contador junto con la excepcion
+    // y la cuenta no llegaria a bloquearse nunca.
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public TokenResponse login(@Valid @RequestBody LoginRequest request) {
         if (!propiedades.proteccionActiva()) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
@@ -87,12 +94,25 @@ public class AuthController {
         boolean claveCorrecta = encoder.matches(request.password(),
                 encontrado.map(Usuario::getPasswordHash).orElse(hashFicticio));
 
+        Instant ahora = clock.instant();
+
+        // Una cuenta bloqueada no entra aunque la clave sea correcta (HU-11). Se responde
+        // lo mismo que ante una clave mala: decir "está bloqueada" confirmaría que existe.
+        if (encontrado.isPresent() && encontrado.get().bloqueado(ahora)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, CREDENCIALES_INVALIDAS);
+        }
+
         if (encontrado.isEmpty() || !claveCorrecta || !encontrado.get().isActive()) {
+            // Solo cuentan los fallos de clave sobre un usuario activo: así nadie puede
+            // bloquear la cuenta de otro probando nombres al azar en una lista.
+            if (encontrado.isPresent() && !claveCorrecta && encontrado.get().isActive()) {
+                registrarFallo(encontrado.get(), ahora);
+            }
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, CREDENCIALES_INVALIDAS);
         }
 
         Usuario usuario = encontrado.get();
-        Instant ahora = clock.instant();
+        usuario.registrarIngresoCorrecto();
         Instant expiracion = ahora.plus(propiedades.duracionToken());
         String jti = UUID.randomUUID().toString();
 
@@ -113,6 +133,15 @@ public class AuthController {
         sesiones.abrir(jti, usuario.getUsername(), ahora, expiracion);
 
         return new TokenResponse(token, "Bearer", usuario.getRoles(), propiedades.duracionToken().toSeconds());
+    }
+
+    private void registrarFallo(Usuario usuario, Instant ahora) {
+        boolean quedoBloqueada = usuario.registrarIntentoFallido(
+                propiedades.intentosAntesDeBloquear(), propiedades.duracionBloqueo(), ahora);
+        if (quedoBloqueada) {
+            auditorias.registrar(Auditorias.SISTEMA, Auditorias.CUENTA_BLOQUEADA, usuario.getUsername(),
+                    "tras " + propiedades.intentosAntesDeBloquear() + " intentos fallidos seguidos");
+        }
     }
 
     /** Quién tiene la sesión abierta con este token, para que la interfaz lo muestre. */

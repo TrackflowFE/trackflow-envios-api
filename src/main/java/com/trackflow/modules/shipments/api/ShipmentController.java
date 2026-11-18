@@ -7,6 +7,10 @@ import com.trackflow.modules.shipments.application.AdmitirEnvio;
 import com.trackflow.modules.shipments.application.ConsultarComprobante;
 import com.trackflow.modules.shipments.application.EnvioSolicitado;
 import jakarta.validation.Valid;
+import com.trackflow.modules.shipments.api.dto.FichaEnvioResponse;
+import com.trackflow.modules.shipments.application.ConsultarFichaDeEnvio;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,10 +32,13 @@ public class ShipmentController {
 
     private final AdmitirEnvio admitirEnvio;
     private final ConsultarComprobante consultarComprobante;
+    private final ConsultarFichaDeEnvio consultarFicha;
 
-    public ShipmentController(AdmitirEnvio admitirEnvio, ConsultarComprobante consultarComprobante) {
+    public ShipmentController(AdmitirEnvio admitirEnvio, ConsultarComprobante consultarComprobante,
+            ConsultarFichaDeEnvio consultarFicha) {
         this.admitirEnvio = admitirEnvio;
         this.consultarComprobante = consultarComprobante;
+        this.consultarFicha = consultarFicha;
     }
 
     @PostMapping
@@ -53,5 +60,29 @@ public class ShipmentController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(ComprobanteResponse.from(consultarComprobante.porNumero(trackingNumber)));
+    }
+
+    /**
+     * Ficha para trabajar el envío (HU-13): el teléfono y el documento van
+     * enmascarados, porque para registrar un movimiento no hace falta verlos.
+     */
+    @GetMapping("/{trackingNumber}/ficha")
+    public ResponseEntity<FichaEnvioResponse> ficha(@PathVariable String trackingNumber) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(FichaEnvioResponse.from(consultarFicha.enmascarada(trackingNumber)));
+    }
+
+    /**
+     * Datos personales completos (HU-13). Solo para administración, y cada consulta
+     * queda registrada con quién la hizo y cuándo.
+     */
+    @GetMapping("/{trackingNumber}/ficha/completa")
+    public ResponseEntity<FichaEnvioResponse> fichaCompleta(@PathVariable String trackingNumber,
+            @AuthenticationPrincipal Jwt quien) {
+        String actor = quien != null ? quien.getSubject() : "desconocido";
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(FichaEnvioResponse.from(consultarFicha.completa(actor, trackingNumber)));
     }
 }
