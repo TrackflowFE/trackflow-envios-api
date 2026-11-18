@@ -46,6 +46,13 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
                     // El OPTIONS de precomprobación nunca lleva token, por diseño del propio
+                    // HU-13: la ficha completa lleva datos personales sin enmascarar y queda auditada.
+                    auth.requestMatchers(HttpMethod.GET, "/api/shipments/*/ficha/completa")
+                            .hasRole(SecurityProperties.ROL_ADMIN);
+                    // La ficha enmascarada la usa quien atiende el envío.
+                    auth.requestMatchers(HttpMethod.GET, "/api/shipments/*/ficha")
+                            .hasAnyRole(SecurityProperties.ROL_OPERADOR, SecurityProperties.ROL_SUPERVISOR,
+                                    SecurityProperties.ROL_ADMIN);
                     // CORS: si una regla de rol lo alcanza (como pasaba con /api/admin/**, que
                     // no distinguía el método), el navegador ve un 401 en la precomprobación y
                     // ni siquiera intenta la petición real. Dejarlo pasar aquí no abre nada: la

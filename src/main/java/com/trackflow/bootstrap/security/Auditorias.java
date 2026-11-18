@@ -23,6 +23,8 @@ public class Auditorias {
     public static final String CUENTA_DESBLOQUEADA = "CUENTA_DESBLOQUEADA";
     public static final String CUENTA_BLOQUEADA = "CUENTA_BLOQUEADA";
     public static final String CLAVE_CAMBIADA = "CLAVE_CAMBIADA";
+    /** Alguien vio los datos personales completos de un envío (HU-13). */
+    public static final String DATOS_COMPLETOS_CONSULTADOS = "DATOS_COMPLETOS_CONSULTADOS";
 
     /** Cuando el cambio no lo hace una persona, sino el arranque de la aplicación. */
     public static final String SISTEMA = "sistema";
