@@ -24,7 +24,7 @@ class SesionesTest {
 
     private final SesionRepository repositorio = mock(SesionRepository.class);
     private final UsuarioRepository usuarios = mock(UsuarioRepository.class);
-    private final SecurityProperties propiedades = new SecurityProperties("", "operador", "clave", "supervisor", "", "admin", "", 480, 30, 5, 15);
+    private final SecurityProperties propiedades = new SecurityProperties("", "operador", "clave", "supervisor", "", "admin", "", 480, 30);
     private final Sesiones sesiones = new Sesiones(repositorio, usuarios, propiedades,
             Clock.fixed(AHORA, ZoneOffset.UTC));
 

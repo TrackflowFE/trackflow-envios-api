@@ -29,7 +29,7 @@ class UsuariosInicialesTest {
     private final Clock clock = Clock.fixed(AHORA, ZoneOffset.UTC);
 
     private UsuariosIniciales con(String claveOperador, String claveAdmin) {
-        SecurityProperties propiedades = new SecurityProperties("", "operador", claveOperador, "supervisor", "", "admin", claveAdmin, 480, 30, 5, 15);
+        SecurityProperties propiedades = new SecurityProperties("", "operador", claveOperador, "supervisor", "", "admin", claveAdmin, 480, 30);
         // Sin correos configurados: estas pruebas miran las claves y los roles.
         return new UsuariosIniciales(usuarios, propiedades, new CorreosIniciales("", "", ""), encoder, clock);
     }

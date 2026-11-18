@@ -50,6 +50,7 @@ public class AuthController {
     }
 
     private final SecurityProperties propiedades;
+    private final BloqueoProperties bloqueo;
     private final JwtEncoder jwtEncoder;
     private final UsuarioRepository usuarios;
     private final Sesiones sesiones;
@@ -64,9 +65,11 @@ public class AuthController {
      */
     private final String hashFicticio;
 
-    public AuthController(SecurityProperties propiedades, JwtEncoder jwtEncoder, UsuarioRepository usuarios,
-            Sesiones sesiones, PasswordEncoder encoder, Auditorias auditorias, Clock clock) {
+    public AuthController(SecurityProperties propiedades, BloqueoProperties bloqueo, JwtEncoder jwtEncoder,
+            UsuarioRepository usuarios, Sesiones sesiones, PasswordEncoder encoder, Auditorias auditorias,
+            Clock clock) {
         this.propiedades = propiedades;
+        this.bloqueo = bloqueo;
         this.jwtEncoder = jwtEncoder;
         this.usuarios = usuarios;
         this.sesiones = sesiones;
@@ -137,10 +140,11 @@ public class AuthController {
 
     private void registrarFallo(Usuario usuario, Instant ahora) {
         boolean quedoBloqueada = usuario.registrarIntentoFallido(
-                propiedades.intentosAntesDeBloquear(), propiedades.duracionBloqueo(), ahora);
+                bloqueo.intentos(), bloqueo.ventana(), bloqueo.duracion(), ahora);
         if (quedoBloqueada) {
             auditorias.registrar(Auditorias.SISTEMA, Auditorias.CUENTA_BLOQUEADA, usuario.getUsername(),
-                    "tras " + propiedades.intentosAntesDeBloquear() + " intentos fallidos seguidos");
+                    "tras " + bloqueo.intentos() + " intentos fallidos en " + bloqueo.ventana().toMinutes()
+                            + " minutos; se desbloquea sola en " + bloqueo.duracion().toMinutes() + " minutos");
         }
     }
 
