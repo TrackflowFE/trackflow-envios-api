@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
  * De dónde sale el correo de recuperación (HU-10).
@@ -17,6 +18,10 @@ import org.springframework.mail.javamail.JavaMailSender;
  * flujo completo, y el aviso del arranque deja claro que falta configurarlo.
  */
 @Configuration
+// Habilita el envío en segundo plano (ver CorreoDeRecuperacion): hablar con el
+// servidor de correo dentro de la petición la hacía tardar segundos solo cuando la
+// cuenta existía, y eso delataba cuáles existen.
+@EnableAsync
 public class CorreoConfig {
 
     private static final Logger log = LoggerFactory.getLogger(CorreoConfig.class);

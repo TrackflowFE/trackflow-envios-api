@@ -1,5 +1,8 @@
 package com.trackflow.bootstrap.security;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
@@ -11,6 +14,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class CorreoDeRecuperacion {
 
+    private static final Logger log = LoggerFactory.getLogger(CorreoDeRecuperacion.class);
+
     private static final String ASUNTO = "TrackFlow: restablecer su contraseña";
 
     private final EnvioDeCorreo correo;
@@ -21,8 +26,23 @@ public class CorreoDeRecuperacion {
         this.propiedades = propiedades;
     }
 
+    /**
+     * Sale en un hilo aparte, y un fallo del servidor de correo no se propaga.
+     *
+     * Las dos cosas sostienen la misma regla: la respuesta a quien pide el enlace
+     * tiene que ser idéntica exista o no la cuenta. Hablar con el servidor de correo
+     * dentro de la petición la hacía tardar varios segundos solo cuando la cuenta
+     * existía, y un error de SMTP la habría convertido en un 500 —dos maneras de
+     * averiguar quién está registrado sin más que mirar la respuesta—.
+     */
+    @Async
     public void enviar(String destino, String username, String token) {
-        correo.enviar(destino, ASUNTO, cuerpo(username, token));
+        try {
+            correo.enviar(destino, ASUNTO, cuerpo(username, token));
+        } catch (RuntimeException e) {
+            // Queda aquí, donde solo lo ve quien opera el sistema, y no en la respuesta.
+            log.error("No se pudo enviar el correo de recuperación de '{}'", username, e);
+        }
     }
 
     private String cuerpo(String username, String token) {
