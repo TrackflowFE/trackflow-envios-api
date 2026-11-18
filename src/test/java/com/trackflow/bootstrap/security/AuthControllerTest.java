@@ -32,13 +32,13 @@ class AuthControllerTest {
 
     private final UsuarioRepository usuarios = mock(UsuarioRepository.class);
     private final Sesiones sesiones = mock(Sesiones.class);
+    private final Auditorias auditorias = mock(Auditorias.class);
     private final PasswordEncoder encoder = new BCryptPasswordEncoder(4);
     private final Clock clock = Clock.fixed(AHORA, ZoneOffset.UTC);
-    private final SecurityProperties propiedades = new SecurityProperties(SECRETO, "operador", "clave-op", "admin",
-            "", 480, 30);
+    private final SecurityProperties propiedades = new SecurityProperties(SECRETO, "operador", "clave-op", "supervisor", "", "admin", "", 480, 30, 5, 15);
     private final JwtConfig jwt = new JwtConfig(propiedades);
     private final AuthController controller = new AuthController(propiedades, jwt.jwtEncoder(), usuarios, sesiones,
-            encoder, clock);
+            encoder, auditorias, clock);
 
     @BeforeEach
     void usuarios() {
@@ -101,9 +101,9 @@ class AuthControllerTest {
 
     @Test
     void sinCredencialesConfiguradasElIngresoNoEstaDisponible() {
-        SecurityProperties abiertas = new SecurityProperties(SECRETO, "operador", "", "admin", "", 480, 30);
+        SecurityProperties abiertas = new SecurityProperties(SECRETO, "operador", "", "supervisor", "", "admin", "", 480, 30, 5, 15);
         AuthController sinProteccion = new AuthController(abiertas, jwt.jwtEncoder(), usuarios, sesiones, encoder,
-                clock);
+                auditorias, clock);
 
         ResponseStatusException e = assertThrows(ResponseStatusException.class,
                 () -> sinProteccion.login(new AuthController.LoginRequest("operador", "clave-op")));

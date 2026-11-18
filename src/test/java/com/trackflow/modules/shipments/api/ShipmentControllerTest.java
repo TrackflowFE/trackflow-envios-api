@@ -17,6 +17,7 @@ import com.trackflow.bootstrap.ValidationExceptionHandler;
 import com.trackflow.modules.shipments.application.AdmitirEnvio;
 import com.trackflow.modules.shipments.application.Comprobante;
 import com.trackflow.modules.shipments.application.ConsultarComprobante;
+import com.trackflow.modules.shipments.application.ConsultarFichaDeEnvio;
 import com.trackflow.modules.shipments.application.EnvioSolicitado;
 import com.trackflow.modules.shipments.domain.DocumentoInvalidoException;
 import com.trackflow.modules.shipments.domain.NumeroDeSeguimientoInvalidoException;
@@ -54,7 +55,8 @@ class ShipmentControllerTest {
 
     private final AdmitirEnvio admitir = mock(AdmitirEnvio.class);
     private final ConsultarComprobante consultar = mock(ConsultarComprobante.class);
-    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ShipmentController(admitir, consultar))
+    private final ConsultarFichaDeEnvio ficha = mock(ConsultarFichaDeEnvio.class);
+    private final MockMvc mvc = MockMvcBuilders.standaloneSetup(new ShipmentController(admitir, consultar, ficha))
             .setControllerAdvice(new ValidationExceptionHandler(), new ShipmentsExceptionHandler())
             .build();
 
