@@ -62,6 +62,13 @@ public class Usuario {
     @Column(name = "last_failed_at")
     private Instant lastFailedAt;
 
+    /**
+     * Cierto mientras la cuenta siga con la contrasena temporal que le puso quien la
+     * creo. Hasta que su dueno elija una propia, la sesion no sirve para nada mas.
+     */
+    @Column(name = "must_change_password", nullable = false)
+    private boolean mustChangePassword;
+
     protected Usuario() {
     }
 
@@ -91,6 +98,16 @@ public class Usuario {
 
     public boolean isPasswordSetByUser() {
         return passwordSetByUser;
+    }
+
+    /** Si todavia tiene la clave temporal con la que la crearon. */
+    public boolean debeCambiarClave() {
+        return mustChangePassword;
+    }
+
+    /** La cuenta nace con una clave que eligio otro: hay que cambiarla antes de usarla. */
+    void exigirCambioDeClave() {
+        this.mustChangePassword = true;
     }
 
     public boolean isActive() {
@@ -166,6 +183,9 @@ public class Usuario {
     void cambiarClavePropia(String passwordHash) {
         this.passwordHash = passwordHash;
         this.passwordSetByUser = true;
+        // Deja de ser temporal en cuanto la elige su dueno, que es lo unico que esta
+        // marca estaba esperando.
+        this.mustChangePassword = false;
         desbloquear();
     }
 

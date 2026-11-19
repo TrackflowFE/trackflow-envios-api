@@ -43,10 +43,15 @@ public class AuthController {
             @NotBlank(message = "la clave es obligatoria") String password) {
     }
 
-    public record TokenResponse(String token, String type, String roles, long expiresInSeconds) {
+    /**
+     * @param mustChangePassword cierto si la sesion solo sirve para cambiar la clave
+     */
+    public record TokenResponse(String token, String type, String roles, long expiresInSeconds,
+            boolean mustChangePassword) {
     }
 
-    public record SesionResponse(String username, String roles, Instant expiresAt) {
+    public record SesionResponse(String username, String roles, Instant expiresAt,
+            boolean mustChangePassword) {
     }
 
     private final SecurityProperties propiedades;
@@ -119,6 +124,13 @@ public class AuthController {
         Instant expiracion = ahora.plus(propiedades.duracionToken());
         String jti = UUID.randomUUID().toString();
 
+        // Mientras la clave sea temporal, el token sale sin roles. No hace falta
+        // bloquear ruta por ruta ni repetir la comprobacion en las otras dos APIs: sin
+        // roles, toda regla que pida uno responde 403, y solo queda en pie lo que
+        // unicamente exige haber iniciado sesion, que es cambiar la clave.
+        boolean temporal = usuario.debeCambiarClave();
+        String rolesDelToken = temporal ? "" : usuario.getRoles();
+
         JwtClaimsSet claims = JwtClaimsSet.builder()
                 // El jti identifica la sesión en el servidor (ver Sesiones).
                 .id(jti)
@@ -126,7 +138,8 @@ public class AuthController {
                 .issuedAt(ahora)
                 .expiresAt(expiracion)
                 .subject(usuario.getUsername())
-                .claim("roles", usuario.getRoles())
+                .claim("roles", rolesDelToken)
+                .claim("mustChangePassword", temporal)
                 .build();
 
         // Sin indicar el algoritmo, el codificador asume RS256 y no encuentra clave asimétrica.
@@ -135,7 +148,8 @@ public class AuthController {
 
         sesiones.abrir(jti, usuario.getUsername(), ahora, expiracion);
 
-        return new TokenResponse(token, "Bearer", usuario.getRoles(), propiedades.duracionToken().toSeconds());
+        return new TokenResponse(token, "Bearer", rolesDelToken, propiedades.duracionToken().toSeconds(),
+                temporal);
     }
 
     private void registrarFallo(Usuario usuario, Instant ahora) {
@@ -151,7 +165,8 @@ public class AuthController {
     /** Quién tiene la sesión abierta con este token, para que la interfaz lo muestre. */
     @GetMapping("/sesion")
     public SesionResponse sesion(@AuthenticationPrincipal Jwt jwt) {
-        return new SesionResponse(jwt.getSubject(), jwt.getClaimAsString("roles"), jwt.getExpiresAt());
+        return new SesionResponse(jwt.getSubject(), jwt.getClaimAsString("roles"), jwt.getExpiresAt(),
+                Boolean.TRUE.equals(jwt.getClaim("mustChangePassword")));
     }
 
     /**

@@ -122,7 +122,8 @@ class AuthControllerTest {
 
         AuthController.SesionResponse sesion = controller.sesion(token);
 
-        assertEquals(new AuthController.SesionResponse("operador", "OPERADOR", vence), sesion);
+        // El cuarto dato dice si la sesion solo sirve para cambiar la clave temporal.
+        assertEquals(new AuthController.SesionResponse("operador", "OPERADOR", vence, false), sesion);
     }
 
     @Test
