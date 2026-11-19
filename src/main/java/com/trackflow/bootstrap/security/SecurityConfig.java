@@ -89,6 +89,9 @@ public class SecurityConfig {
                             "/api/pickups/self-service/*/cancel").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/pickups/self-service/*").permitAll();
                     auth.requestMatchers(HttpMethod.PUT, "/api/pickups/self-service/*/schedule").permitAll();
+                    // HU-19: radicar una PQR y consultarla las hace quien no tiene cuenta. La
+                    // consulta pide el radicado y el correo; el radicado solo no basta.
+                    auth.requestMatchers(HttpMethod.POST, "/api/pqr", "/api/pqr/consulta").permitAll();
                     // /error es a donde Spring reenvía las respuestas de error: si se
                     // cerrara, un 404 llegaría al cliente como 401.
                     auth.requestMatchers("/", "/error", "/actuator/health/**", "/swagger-ui.html",
@@ -102,6 +105,12 @@ public class SecurityConfig {
                         // no son públicos como /api/tracking. El administrador hereda el rol.
                         // HU-11: los reportes son para supervision, no para quien registra.
                         auth.requestMatchers(HttpMethod.GET, "/api/reports/**")
+                                .hasAnyRole(SecurityProperties.ROL_SUPERVISOR, SecurityProperties.ROL_ADMIN);
+                        // HU-19: atender las PQR es de supervisión, no de quien registra paquetes.
+                        // Va antes de POST /api/**, que de otro modo la dejaría al operador.
+                        auth.requestMatchers(HttpMethod.GET, "/api/pqr", "/api/pqr/*")
+                                .hasAnyRole(SecurityProperties.ROL_SUPERVISOR, SecurityProperties.ROL_ADMIN);
+                        auth.requestMatchers(HttpMethod.POST, "/api/pqr/*/estado")
                                 .hasAnyRole(SecurityProperties.ROL_SUPERVISOR, SecurityProperties.ROL_ADMIN);
                         auth.requestMatchers(HttpMethod.POST, "/api/**")
                                 .hasRole(SecurityProperties.ROL_OPERADOR);
