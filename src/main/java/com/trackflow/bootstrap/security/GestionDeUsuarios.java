@@ -28,15 +28,17 @@ public class GestionDeUsuarios {
     private final Sesiones sesiones;
     private final Auditorias auditorias;
     private final PoliticaDeClaves politica;
+    private final InvitacionDeCuenta invitacion;
     private final PasswordEncoder encoder;
     private final Clock clock;
 
     public GestionDeUsuarios(UsuarioRepository usuarios, Sesiones sesiones, Auditorias auditorias,
-            PoliticaDeClaves politica, PasswordEncoder encoder, Clock clock) {
+            PoliticaDeClaves politica, InvitacionDeCuenta invitacion, PasswordEncoder encoder, Clock clock) {
         this.usuarios = usuarios;
         this.sesiones = sesiones;
         this.auditorias = auditorias;
         this.politica = politica;
+        this.invitacion = invitacion;
         this.encoder = encoder;
         this.clock = clock;
     }
@@ -59,12 +61,22 @@ public class GestionDeUsuarios {
         String normalizados = validarRoles(roles);
 
         Usuario usuario = new Usuario(username, encoder.encode(clave), normalizados, true, clock.instant());
+        // La contrasena la eligio quien crea la cuenta, no su dueno: sirve para entrar
+        // una vez y cambiarla, y para nada mas.
+        usuario.exigirCambioDeClave();
         if (tieneValor(email)) {
             exigirCorreoLibre(email, username);
             usuario.cambiarEmail(email.trim());
         }
         usuarios.save(usuario);
         auditorias.registrar(actor, Auditorias.USUARIO_CREADO, username, "roles: " + normalizados);
+
+        // Con correo, esa persona elige su propia contrasena y la inicial deja de
+        // importar: nadie mas la conoce. Sin correo, el administrador tendra que
+        // hacerle llegar la que acaba de fijar.
+        if (tieneValor(email)) {
+            invitacion.enviar(username, usuario.getEmail());
+        }
         return usuario;
     }
 
