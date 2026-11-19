@@ -48,10 +48,9 @@ public class UsuariosIniciales implements ApplicationRunner {
         // El supervisor solo consulta: no hereda los permisos del operador.
         asegurar(propiedades.supervisorUsuario(), propiedades.supervisorClave(), SecurityProperties.ROL_SUPERVISOR,
                 correos.supervisor());
-        // El administrador puede todo: administra, opera y consulta reportes.
-        asegurar(propiedades.adminUsuario(), propiedades.adminClave(),
-                SecurityProperties.ROL_ADMIN + " " + SecurityProperties.ROL_OPERADOR
-                        + " " + SecurityProperties.ROL_SUPERVISOR,
+        // Un solo rol le basta: la jerarquia de SecurityConfig hace que el
+        // administrador pueda tambien lo del operador y lo del supervisor.
+        asegurar(propiedades.adminUsuario(), propiedades.adminClave(), SecurityProperties.ROL_ADMIN,
                 correos.admin());
     }
 
