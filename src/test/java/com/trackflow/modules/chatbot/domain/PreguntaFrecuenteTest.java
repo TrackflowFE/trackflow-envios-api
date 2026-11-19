@@ -43,7 +43,7 @@ class PreguntaFrecuenteTest {
         assertThrows(IllegalArgumentException.class,
                 () -> new Contenido("x", "pregunta valida", List.of("a"), "respuesta valida", 0));
         assertThrows(IllegalArgumentException.class,
-                () -> new Contenido("cat", "corta", List.of("a"), "respuesta valida", 0));
+                () -> new Contenido("cat", "cort", List.of("a"), "respuesta valida", 0));
         assertThrows(IllegalArgumentException.class,
                 () -> new Contenido("cat", "pregunta valida", List.of("a"), "corta", 0));
         assertThrows(IllegalArgumentException.class,

@@ -43,7 +43,7 @@ class AdministrarFaqTest {
         administrar.crear("nocturnos", contenido("Por ahora no."), "admin");
 
         assertThrows(IntencionDuplicadaException.class,
-                () -> administrar.crear("nocturnos", contenido("Otra."), "admin"));
+                () -> administrar.crear("nocturnos", contenido("Otra respuesta distinta."), "admin"));
         assertEquals(1, administrar.listar().size());
     }
 
