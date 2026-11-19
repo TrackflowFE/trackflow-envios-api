@@ -92,6 +92,11 @@ public class SecurityConfig {
                     // HU-19: radicar una PQR y consultarla las hace quien no tiene cuenta. La
                     // consulta pide el radicado y el correo; el radicado solo no basta.
                     auth.requestMatchers(HttpMethod.POST, "/api/pqr", "/api/pqr/consulta").permitAll();
+                    // HU-21: el chatbot lo usa cualquier visitante. No consulta envíos ni cuentas y
+                    // tiene tope de mensajes por sesión y por IP.
+                    auth.requestMatchers(HttpMethod.POST, "/api/chatbot/sesiones", "/api/chatbot/mensajes")
+                            .permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/chatbot/sugerencias").permitAll();
                     // /error es a donde Spring reenvía las respuestas de error: si se
                     // cerrara, un 404 llegaría al cliente como 401.
                     auth.requestMatchers("/", "/error", "/actuator/health/**", "/swagger-ui.html",

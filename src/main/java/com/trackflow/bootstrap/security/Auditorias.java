@@ -28,6 +28,12 @@ public class Auditorias {
     /** Alguien vio los datos personales completos de un envío (HU-13). */
     public static final String DATOS_COMPLETOS_CONSULTADOS = "DATOS_COMPLETOS_CONSULTADOS";
 
+    /** Un administrador cambió el contenido del chatbot (HU-21). */
+    public static final String FAQ_CREADA = "FAQ_CREADA";
+    public static final String FAQ_EDITADA = "FAQ_EDITADA";
+    public static final String FAQ_ACTIVADA = "FAQ_ACTIVADA";
+    public static final String FAQ_DESACTIVADA = "FAQ_DESACTIVADA";
+
     /** Cuando el cambio no lo hace una persona, sino el arranque de la aplicación. */
     public static final String SISTEMA = "sistema";
 
