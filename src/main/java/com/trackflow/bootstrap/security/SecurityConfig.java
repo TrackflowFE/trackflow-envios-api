@@ -8,6 +8,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchy;
+import org.springframework.security.access.hierarchicalroles.RoleHierarchyImpl;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
@@ -141,6 +143,31 @@ public class SecurityConfig {
         }
 
         return http.build();
+    }
+
+    /**
+     * El administrador contiene a los otros dos: puede lo que el operador y lo que el
+     * supervisor.
+     *
+     * Y solo el: supervisor y operador no son dos escalones de una misma escalera, sino
+     * dos funciones distintas. Quien supervisa consulta reportes pero no registra
+     * envios (HU-11), asi que encadenarlos le habria dado permiso de escritura sin que
+     * nadie se lo diera.
+     *
+     * Sin esta jerarquia cada regla exigia su rol literal, asi que al administrador
+     * habia que darle los tres para que pudiera registrar un envio o abrir un reporte.
+     * Funcionaba, pero obligaba a recordar la lista completa cada vez que se creaba una
+     * cuenta, y bastaba olvidar uno para dejar a alguien a medias.
+     *
+     * Se declara en un solo sitio: las reglas de abajo siguen pidiendo el rol minimo
+     * que corresponde a cada ruta, que es como se leen mejor.
+     */
+    @Bean
+    static RoleHierarchy jerarquiaDeRoles() {
+        return RoleHierarchyImpl.withDefaultRolePrefix()
+                .role(SecurityProperties.ROL_ADMIN)
+                .implies(SecurityProperties.ROL_SUPERVISOR, SecurityProperties.ROL_OPERADOR)
+                .build();
     }
 
     /** Traduce el claim "roles" del token a las autoridades que espera Spring Security. */

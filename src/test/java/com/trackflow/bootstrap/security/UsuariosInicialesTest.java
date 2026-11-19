@@ -50,9 +50,9 @@ class UsuariosInicialesTest {
         assertFalse(operador.getPasswordHash().contains("clave-op"));
         assertTrue(encoder.matches("clave-op", operador.getPasswordHash()));
         assertEquals("admin", admin.getUsername());
-        // Desde HU-11 el administrador tambien supervisa: ve los reportes sin que haya
-        // que darle una segunda cuenta.
-        assertEquals("ADMIN OPERADOR SUPERVISOR", admin.getRoles());
+        // Un solo rol: la jerarquia de SecurityConfig hace que el administrador pueda
+        // ademas lo del operador y lo del supervisor, sin escribirselos aqui.
+        assertEquals("ADMIN", admin.getRoles());
         assertTrue(encoder.matches("clave-admin", admin.getPasswordHash()));
     }
 
