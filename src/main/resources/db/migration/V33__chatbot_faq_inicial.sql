@@ -1,0 +1,25 @@
+-- HU-21. Contenido inicial del chatbot.
+--
+-- Cada respuesta describe algo que el sistema hace de verdad hoy: rastreo, los siete
+-- estados de un envío, recogidas, PQR y privacidad. No se incluyen tarifas, medios de
+-- pago, límites de peso, horarios de atención ni plazos legales, porque el sistema no
+-- los define: si algún día existen, un administrador los agrega desde la API.
+
+insert into chatbot_faq (intencion, categoria, pregunta, palabras_clave, respuesta, activo, orden, updated_at, updated_by)
+select v.intencion, v.categoria, v.pregunta, v.palabras_clave, v.respuesta, true, v.orden, now(), 'sistema'
+from (values
+('saludo', 'general', 'Hola, buenas', 'hola,buenas,saludos,ayuda', 'Hola, soy el asistente de TrackFlow. Puedo ayudarte con el rastreo de envíos, las recogidas a domicilio y las PQR (peticiones, quejas y reclamos). ¿Qué necesitas?', 1),
+('como_rastrear', 'seguimiento', '¿Cómo rastreo mi envío?', 'rastrear,rastreo,seguimiento,seguir,guia,estado,consultar,paquete,envio', 'En la página principal, "Rastrear", escribe el número de guía y pulsa el botón. Verás el estado actual y el recorrido de tu envío. No necesitas cuenta.', 2),
+('formato_guia', 'seguimiento', '¿Cómo es el número de guía?', 'numero,guia,formato,codigo,tf,letras', 'El número de guía empieza por TF y le siguen 12 letras o números, por ejemplo TFXXXXXXXXXXXX. Lo recibe quien registra el envío. Por seguridad, no lo escribas en este chat: úsalo en la página de rastreo.', 3),
+('estados_envio', 'seguimiento', '¿Qué significa cada estado del envío?', 'estados,estado,significa,custodia,transito,reparto,entregado,registrado,centro', 'Un envío pasa por siete estados: Registrado, En custodia (ya lo recogimos en la dirección del remitente), En centro de origen, En tránsito, En centro de destino, En reparto (sale a entregarse) y Entregado.', 4),
+('paquete_no_llega', 'pqr', '¿Qué hago si mi paquete no llega o llegó mal?', 'llega,llego,demora,demorado,retraso,retrasado,perdido,perdio,danado,golpeado,roto,problema,queja,reclamo', 'Primero revisa el estado en "Rastrear". Si sigue sin llegar o llegó con algún problema, puedes radicar una PQR (petición, queja o reclamo) y te daremos un número de radicado para seguir tu caso.', 5),
+('pedir_recogida', 'recogida', '¿Cómo pido que recojan mi paquete?', 'recoger,recojan,recogida,recogen,domicilio,pedir,solicitar,programar,agendar', 'Entra a "Pedir recogida", elige la ciudad, escribe la dirección y el contacto, y escoge la fecha y la franja. El formulario te muestra los días y las franjas disponibles. Al terminar recibes un número de recogida y un código de gestión: guárdalos.', 6),
+('gestionar_recogida', 'recogida', '¿Cómo consulto o cambio mi recogida?', 'consultar,cambiar,reprogramar,reprogramo,mover,modificar,recogida,codigo,gestion', 'En "Mi recogida" escribe el número de recogida (empieza por RC) y el código de gestión que recibiste al pedirla. Ahí puedes ver su estado, reprogramarla o cancelarla.', 7),
+('cancelar_recogida', 'recogida', '¿Puedo cancelar una recogida?', 'cancelar,cancelo,cancelacion,anular,anulo,recogida', 'Sí, desde "Mi recogida" con tu número y tu código de gestión. Solo se puede cancelar mientras nadie haya salido a recogerla.', 8),
+('registrar_envio', 'envios', '¿Cómo registro un envío?', 'registrar,registro,crear,enviar,mandar,despachar,envio', 'Los envíos los registra el personal autorizado de TrackFlow. Si quieres enviar un paquete y que lo recojan, pide una recogida en "Pedir recogida".', 9),
+('cobertura', 'cobertura', '¿A qué ciudades llegan?', 'ciudades,ciudad,cobertura,cubren,llegan,destino,municipios', 'Al pedir una recogida, el buscador de ciudades te muestra las disponibles. Si tu ciudad no aparece, puede que aún no tengamos cobertura allí; puedes escribirnos por una PQR.', 10),
+('radicar_pqr', 'pqr', '¿Cómo radico una PQR?', 'radicar,radico,pqr,peticion,queja,reclamo,reclamar,sugerencia', 'Entra a "PQR", elige si es petición, queja o reclamo, describe tu caso (de 20 a 2000 caracteres) y deja tu nombre y correo. Al enviarla verás tu número de radicado y también te lo mandamos por correo.', 11),
+('consultar_pqr', 'pqr', '¿Cómo consulto mi PQR?', 'consultar,consulto,pqr,radicado,estado,respuesta,resuelta,tramite', 'En "Consultar PQR" escribe tu número de radicado y el correo con el que la radicaste. Verás si está Recibida, En trámite, Resuelta o Cerrada y, cuando haya, la respuesta.', 12),
+('privacidad', 'privacidad', '¿Qué datos míos se ven en el rastreo?', 'privacidad,datos,personales,publico,informacion,nombre,direccion,telefono,seguridad', 'El rastreo público no muestra direcciones ni teléfonos, y los nombres aparecen parcialmente. Para una PQR guardamos los datos que escribes solo para atenderla y avisarte por correo.', 13),
+('contacto_humano', 'pqr', '¿Cómo hablo con una persona?', 'persona,humano,asesor,agente,contacto,contactar,hablar,atencion,cliente,comunicar', 'Por ahora la atención con una persona se hace por PQR: radica tu caso y alguien del equipo te responde por correo.', 14)
+) as v(intencion, categoria, pregunta, palabras_clave, respuesta, orden);
