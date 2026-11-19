@@ -1,5 +1,7 @@
 package com.trackflow.modules.pickups.api;
 
+import com.trackflow.shared.seguridad.IpDelCliente;
+import com.trackflow.shared.seguridad.VentanasDeIntentos;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

@@ -1,10 +1,10 @@
-package com.trackflow.modules.pickups.api;
+package com.trackflow.shared.seguridad;
 
 import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-final class VentanasDeIntentos {
+public final class VentanasDeIntentos {
     private record Ventana(long hasta, long id, int cantidad) { }
 
     private final Map<String, Ventana> ventanas = new LinkedHashMap<>(16, 0.75f, true);
@@ -13,13 +13,13 @@ final class VentanasDeIntentos {
     private final Clock clock;
     private long ultimaReserva;
 
-    VentanasDeIntentos(int capacidad, long duracionMillis, Clock clock) {
+    public VentanasDeIntentos(int capacidad, long duracionMillis, Clock clock) {
         this.capacidad = capacidad;
         this.duracionMillis = duracionMillis;
         this.clock = clock;
     }
 
-    synchronized Long reservar(String clave, int limite) {
+    public synchronized Long reservar(String clave, int limite) {
         long ahora = clock.millis();
         Ventana ventana = ventanas.get(clave);
         if (ventana == null || ventana.hasta() <= ahora) {
@@ -38,7 +38,7 @@ final class VentanasDeIntentos {
         return ventana.id();
     }
 
-    synchronized void liberar(String clave, Long hasta) {
+    public synchronized void liberar(String clave, Long hasta) {
         Ventana ventana = ventanas.get(clave);
         if (ventana != null && hasta != null && ventana.id() == hasta) {
             if (ventana.cantidad() <= 1) {

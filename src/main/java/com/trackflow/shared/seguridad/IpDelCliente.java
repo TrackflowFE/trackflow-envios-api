@@ -1,4 +1,4 @@
-package com.trackflow.modules.pickups.api;
+package com.trackflow.shared.seguridad;
 
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletRequestWrapper;
@@ -22,14 +22,14 @@ import org.springframework.stereotype.Component;
  * así que sin rangos todos los clientes compartirían la cuota del proxy.
  */
 @Component
-final class IpDelCliente {
+public final class IpDelCliente {
     private static final Logger log = LoggerFactory.getLogger(IpDelCliente.class);
 
     private final int saltos;
     private final List<Rango> proxies;
     private final AtomicBoolean avisoProxySinSaltos = new AtomicBoolean();
 
-    IpDelCliente(@Value("${trackflow.pickups.limite.saltos-proxy:0}") int saltos,
+    public IpDelCliente(@Value("${trackflow.pickups.limite.saltos-proxy:0}") int saltos,
             @Value("${trackflow.pickups.limite.proxies-confiables:}") String proxies) {
         if (saltos < 0 || saltos > 16) {
             throw new IllegalArgumentException("Los saltos de proxy deben estar entre 0 y 16");
@@ -43,7 +43,7 @@ final class IpDelCliente {
         }
     }
 
-    String obtener(HttpServletRequest request) {
+    public String obtener(HttpServletRequest request) {
         ServletRequest original = request;
         while (original instanceof ServletRequestWrapper wrapper) {
             original = wrapper.getRequest();

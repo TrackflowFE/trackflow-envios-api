@@ -2,6 +2,7 @@ package com.trackflow.modules.pickups.api;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import com.trackflow.shared.seguridad.IpDelCliente;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
