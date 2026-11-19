@@ -9,7 +9,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.scheduling.annotation.EnableAsync;
-import org.springframework.web.client.RestClient;
 
 /**
  * De dónde sale el correo de recuperación (HU-10). Hay tres salidas, y se escoge la
@@ -38,7 +37,7 @@ public class CorreoConfig {
      * cada envío fallaría al intentar conectarse a ninguna parte.
      */
     @Bean
-    EnvioDeCorreo envioDeCorreo(ObjectProvider<JavaMailSender> mailSender, RestClient.Builder clientes,
+    EnvioDeCorreo envioDeCorreo(ObjectProvider<JavaMailSender> mailSender,
             @Value("${spring.mail.host:}") String hostSmtp,
             @Value("${trackflow.claves.api-url:}") String apiUrl,
             @Value("${trackflow.claves.api-clave:}") String apiClave,
@@ -46,7 +45,7 @@ public class CorreoConfig {
 
         if (!apiClave.isBlank() && !apiUrl.isBlank()) {
             log.info("Correo por API en {}: los enlaces de recuperación se envían de verdad", apiUrl);
-            return new CorreoPorApi(clientes, apiUrl, apiClave, propiedades.remitente());
+            return new CorreoPorApi(apiUrl, apiClave, propiedades.remitente());
         }
 
         JavaMailSender emisor = mailSender.getIfAvailable();

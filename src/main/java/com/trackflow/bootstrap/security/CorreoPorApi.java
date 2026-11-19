@@ -23,10 +23,13 @@ public class CorreoPorApi implements EnvioDeCorreo {
     private final String url;
     private final String remitente;
 
-    public CorreoPorApi(RestClient.Builder clientes, String url, String clave, String remitente) {
+    public CorreoPorApi(String url, String clave, String remitente) {
         this.url = url;
         this.remitente = remitente;
-        this.cliente = clientes
+        // El cliente se construye aqui en lugar de pedir un RestClient.Builder al
+        // contexto: ese bean lo aporta una autoconfiguracion que este proyecto no
+        // trae, y sin ella la aplicacion no arranca.
+        this.cliente = RestClient.builder()
                 .defaultHeader("api-key", clave)
                 .defaultHeader("accept", MediaType.APPLICATION_JSON_VALUE)
                 .build();
