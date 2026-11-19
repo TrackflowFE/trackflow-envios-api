@@ -1,4 +1,4 @@
-package com.trackflow.modules.pickups.api;
+package com.trackflow.shared.seguridad;
 
 import static org.junit.jupiter.api.Assertions.*;
 
