@@ -2,6 +2,7 @@ package com.trackflow.bootstrap.security;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -33,8 +34,15 @@ public class SecurityConfig {
         this.propiedades = propiedades;
     }
 
+    /**
+     * Las métricas de Prometheus solo se abren en el puerto de gestión, que es otro puerto
+     * y que Kubernetes no publica fuera del clúster. Sin puerto de gestión aparte (por
+     * ejemplo en Render, donde solo hay uno) no coincide ninguna petición, de modo que
+     * /actuator/prometheus sigue cerrado como cualquier ruta no listada.
+     */
     @Bean
-    SecurityFilterChain filterChain(HttpSecurity http) {
+    SecurityFilterChain filterChain(HttpSecurity http,
+            @Value("${management.server.port:-1}") int puertoDeGestion) {
         boolean protegido = propiedades.proteccionActiva();
 
         http
@@ -99,6 +107,10 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.GET, "/api/chatbot/sugerencias").permitAll();
                     // /error es a donde Spring reenvía las respuestas de error: si se
                     // cerrara, un 404 llegaría al cliente como 401.
+                    if (puertoDeGestion > 0) {
+                        auth.requestMatchers(peticion -> peticion.getLocalPort() == puertoDeGestion
+                                && peticion.getRequestURI().startsWith("/actuator/")).permitAll();
+                    }
                     auth.requestMatchers("/", "/error", "/actuator/health/**", "/swagger-ui.html",
                             "/swagger-ui/**", "/v3/api-docs/**").permitAll();
 
