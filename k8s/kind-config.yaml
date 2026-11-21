@@ -1,0 +1,25 @@
+# Clúster local de un solo nodo. Cada servicio publicado se enlaza a un puerto de tu equipo.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: trackflow
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30080   # API de envíos
+        hostPort: 8080
+        protocol: TCP
+      - containerPort: 30082   # API de reportes
+        hostPort: 8082
+        protocol: TCP
+      - containerPort: 30083   # API de logística
+        hostPort: 8083
+        protocol: TCP
+      - containerPort: 30300   # Grafana
+        hostPort: 3000
+        protocol: TCP
+      - containerPort: 30900   # Prometheus
+        hostPort: 9090
+        protocol: TCP
+      - containerPort: 31567   # Consola de RabbitMQ
+        hostPort: 15672
+        protocol: TCP
