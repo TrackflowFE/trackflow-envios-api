@@ -1,0 +1,84 @@
+# Prometheus consulta cada 15 s el puerto de gestión (8081) de cada API. Ese puerto solo existe
+# dentro del clúster: los Service públicos de las APIs publican únicamente el 8080.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: trackflow
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+    scrape_configs:
+      - job_name: trackflow-apis
+        metrics_path: /actuator/prometheus
+        static_configs:
+          - targets: ["api-envios:8081"]
+            labels: { api: envios }
+          - targets: ["api-reportes:8081"]
+            labels: { api: reportes }
+          - targets: ["api-logistica:8081"]
+            labels: { api: logistica }
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: trackflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: prometheus }
+  template:
+    metadata:
+      labels: { app: prometheus }
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v3.0.1
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=2d
+          ports:
+            - containerPort: 9090
+          readinessProbe:
+            httpGet: { path: /-/ready, port: 9090 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 384Mi }
+          volumeMounts:
+            - { name: config, mountPath: /etc/prometheus }
+            - { name: datos, mountPath: /prometheus }
+      volumes:
+        - name: config
+          configMap:
+            name: prometheus-config
+        - name: datos
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: trackflow
+spec:
+  selector: { app: prometheus }
+  ports:
+    - { port: 9090, targetPort: 9090 }
+---
+# Para abrir Prometheus en tu navegador (http://localhost:9090).
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-publico
+  namespace: trackflow
+spec:
+  type: NodePort
+  selector: { app: prometheus }
+  ports:
+    - { port: 9090, targetPort: 9090, nodePort: 30900 }
