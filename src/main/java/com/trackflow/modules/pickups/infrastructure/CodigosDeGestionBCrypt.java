@@ -2,6 +2,7 @@ package com.trackflow.modules.pickups.infrastructure;
 
 import com.trackflow.modules.pickups.application.CodigosDeGestion;
 import java.security.SecureRandom;
+import java.util.UUID;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -14,7 +15,9 @@ public class CodigosDeGestionBCrypt implements CodigosDeGestion {
 
     public CodigosDeGestionBCrypt(PasswordEncoder encoder) {
         this.encoder = encoder;
-        this.hashDeRelleno = encoder.encode("CODIGO-DE-RELLENO");
+        // Hash para gastar el mismo tiempo cuando no hay hash guardado. Se genera con un
+        // valor al azar en cada arranque: no es una contraseña y nadie puede conocerlo.
+        this.hashDeRelleno = encoder.encode(UUID.randomUUID().toString());
     }
 
     @Override

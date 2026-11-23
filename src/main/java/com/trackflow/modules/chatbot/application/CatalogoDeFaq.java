@@ -7,6 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -50,7 +51,7 @@ public class CatalogoDeFaq {
 
     private final FaqRepository faqs;
     private final double umbral;
-    private volatile List<Entrada> entradas = List.of();
+    private final AtomicReference<List<Entrada>> entradas = new AtomicReference<>(List.of());
 
     public CatalogoDeFaq(FaqRepository faqs, @Value("${trackflow.chatbot.umbral:0.35}") double umbral) {
         if (umbral <= 0 || umbral > 1) {
@@ -61,7 +62,7 @@ public class CatalogoDeFaq {
     }
 
     public void recargar() {
-        entradas = faqs.activas().stream().map(Entrada::de).toList();
+        entradas.set(faqs.activas().stream().map(Entrada::de).toList());
     }
 
     public Optional<Coincidencia> mejor(String texto) {
@@ -69,7 +70,7 @@ public class CatalogoDeFaq {
         if (mensaje.isEmpty()) {
             return Optional.empty();
         }
-        return entradas.stream().map(entrada -> new Coincidencia(entrada, entrada.puntaje(mensaje)))
+        return entradas.get().stream().map(entrada -> new Coincidencia(entrada, entrada.puntaje(mensaje)))
                 .filter(c -> c.puntaje() >= umbral)
                 .min(Comparator.comparingDouble((Coincidencia c) -> -c.puntaje())
                         .thenComparingInt(c -> c.entrada().orden())
@@ -78,6 +79,6 @@ public class CatalogoDeFaq {
 
     /** Preguntas para mostrar como botones: las primeras por orden, sin el saludo. */
     public List<Entrada> sugerencias(int maximo) {
-        return entradas.stream().filter(e -> !"general".equals(e.categoria())).limit(maximo).toList();
+        return entradas.get().stream().filter(e -> !"general".equals(e.categoria())).limit(maximo).toList();
     }
 }
