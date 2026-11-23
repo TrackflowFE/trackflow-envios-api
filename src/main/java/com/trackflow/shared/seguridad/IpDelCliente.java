@@ -147,6 +147,23 @@ public final class IpDelCliente {
     /** Una IP literal (prefijo completo) o un rango CIDR. */
     private record Rango(byte[] red, int prefijo) {
 
+        // El record lleva un arreglo: el equals, hashCode y toString generados
+        // compararían la referencia y no el contenido, por eso se sobrescriben.
+        @Override
+        public boolean equals(Object otro) {
+            return otro instanceof Rango rango && prefijo == rango.prefijo && Arrays.equals(red, rango.red);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * Arrays.hashCode(red) + prefijo;
+        }
+
+        @Override
+        public String toString() {
+            return "Rango[red=" + Arrays.toString(red) + ", prefijo=" + prefijo + "]";
+        }
+
         static Rango de(String texto) {
             int corte = texto.indexOf('/');
             if (corte < 0) {
