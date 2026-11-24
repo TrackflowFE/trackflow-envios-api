@@ -1,8 +1,11 @@
 package com.trackflow.bootstrap.security;
 
+import com.trackflow.shared.seguridad.IpDelCliente;
 import java.time.Clock;
 import java.util.List;
 import org.springframework.data.domain.Limit;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,15 +36,32 @@ public class Auditorias {
 
     private final AuditoriaRepository repositorio;
     private final Clock clock;
+    private final IpDelCliente ipDelCliente;
 
-    public Auditorias(AuditoriaRepository repositorio, Clock clock) {
+    public Auditorias(AuditoriaRepository repositorio, Clock clock, IpDelCliente ipDelCliente) {
         this.repositorio = repositorio;
         this.clock = clock;
+        this.ipDelCliente = ipDelCliente;
     }
 
     @Transactional
     public void registrar(String actor, String accion, String objetivo, String detalle) {
-        repositorio.save(new Auditoria(actor, accion, objetivo, detalle, clock.instant()));
+        repositorio.save(new Auditoria(actor, accion, objetivo, detalle, clock.instant(), ipDeLaPeticion()));
+    }
+
+    /**
+     * La IP se toma del hilo de la petición en curso y no como parámetro, para que las
+     * llamadas que ya existen no tengan que arrastrarla por media aplicación.
+     *
+     * Devuelve null cuando no hay petición: el arranque que crea los usuarios iniciales,
+     * o un envío de correo asíncrono. Un registro sin IP es correcto; uno con la IP
+     * equivocada no lo sería.
+     */
+    private String ipDeLaPeticion() {
+        if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes atributos) {
+            return ipDelCliente.obtener(atributos.getRequest());
+        }
+        return null;
     }
 
     @Transactional(readOnly = true)

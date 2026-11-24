@@ -36,10 +36,23 @@ public class Auditoria {
     @Column(name = "ocurrido_en", nullable = false, updatable = false)
     private Instant ocurridoEn;
 
+    /**
+     * Desde dónde se hizo. Nulo cuando no hay petición detrás: el arranque de la
+     * aplicación, o una tarea asíncrona. Cabe una IPv6 con zona.
+     */
+    @Column(name = "ip_origen", length = 45, updatable = false)
+    private String ipOrigen;
+
     protected Auditoria() {
     }
 
     public Auditoria(String actor, String accion, String objetivo, String detalle, Instant ocurridoEn) {
+        this(actor, accion, objetivo, detalle, ocurridoEn, null);
+    }
+
+    public Auditoria(String actor, String accion, String objetivo, String detalle, Instant ocurridoEn,
+            String ipOrigen) {
+        this.ipOrigen = ipOrigen;
         this.actor = actor;
         this.accion = accion;
         this.objetivo = objetivo;
@@ -69,5 +82,9 @@ public class Auditoria {
 
     public Instant getOcurridoEn() {
         return ocurridoEn;
+    }
+
+    public String getIpOrigen() {
+        return ipOrigen;
     }
 }

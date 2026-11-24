@@ -1,5 +1,7 @@
 package com.trackflow.modules.pickups.api;
 
+import com.trackflow.shared.seguridad.IpDelCliente;
+import com.trackflow.shared.seguridad.VentanasDeIntentos;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Clock;

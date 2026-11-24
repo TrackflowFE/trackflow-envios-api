@@ -57,7 +57,7 @@ public class UsuariosAdminController {
     }
 
     public record AuditoriaResponse(String actor, String accion, String objetivo, String detalle,
-            Instant ocurridoEn) {
+            Instant ocurridoEn, String ipOrigen) {
     }
 
     private final GestionDeUsuarios gestion;
@@ -112,12 +112,12 @@ public class UsuariosAdminController {
         return UsuarioResponse.de(gestion.desbloquear(actor(quien), username), clock.instant());
     }
 
-    /** El registro de quién cambió qué y cuándo que pide HU-11. */
+    /** El registro de quién cambió qué, cuándo y desde dónde que pide HU-11. */
     @GetMapping("/auditoria")
     public List<AuditoriaResponse> auditoria(@RequestParam(defaultValue = "100") int cuantos) {
         return auditorias.ultimos(Math.clamp(cuantos, 1, 500)).stream()
                 .map(a -> new AuditoriaResponse(a.getActor(), a.getAccion(), a.getObjetivo(), a.getDetalle(),
-                        a.getOcurridoEn()))
+                        a.getOcurridoEn(), a.getIpOrigen()))
                 .toList();
     }
 
