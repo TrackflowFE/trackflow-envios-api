@@ -79,6 +79,9 @@ public class LimiteDeLoginFilter extends OncePerRequestFilter {
             response.setHeader("Retry-After", String.valueOf(segundos));
             response.setHeader("Cache-Control", "no-store");
             response.setContentType("application/problem+json");
+            // Sin esto el contenedor usa ISO-8859-1 y cualquier tilde del mensaje
+            // llegaria rota al cliente.
+            response.setCharacterEncoding("UTF-8");
             response.getWriter().write("""
                     {"type":"about:blank","title":"Demasiadas peticiones","status":429,\
                     "detail":"Espere unos segundos antes de volver a intentarlo."}""");

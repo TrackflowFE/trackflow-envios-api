@@ -57,7 +57,8 @@ class LimiteDeLoginFilterTest {
         assertEquals(429, response.getStatus());
         assertEquals("45", response.getHeader("Retry-After"));
         assertEquals("no-store", response.getHeader("Cache-Control"));
-        assertEquals("application/problem+json", response.getContentType());
+        // El charset va explicito: sin el, el contenedor usa ISO-8859-1.
+        assertEquals("application/problem+json;charset=UTF-8", response.getContentType());
         // El cuerpo no dice si el usuario existe ni si la clave era correcta.
         assertTrue(response.getContentAsString().contains("Demasiadas peticiones"));
     }
